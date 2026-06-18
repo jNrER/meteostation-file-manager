@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Configuración local
+config.json
+
+# Archivos sensibles / locales
+MaestraEstaciones.xlsx
+
+# Carpetas generadas por el aplicativo
+LEGAJOS_ESTACION/
+OBSOLETOS/
+
+# Temporales de Office
+*.tmp
+*.bak
+~$*.xlsx
+~$*.xls
+
+# Entornos virtuales
+venv/
+.venv/
+env/
+
+# Sistema
+.DS_Store
+Thumbs.db
