@@ -251,6 +251,7 @@ class LegajosGUIV2(BaseApp):
 
         buttons = [
             ("Agregar informe correctivo individual", "add"),
+            ("Agregar mantenimiento grupal", "addmantenimiento_grupal"),
             ("Agregar checklist de ruta", "addchecklist"),
             ("Agregar estado situacional de ruta", "addestado_situacional"),
             ("Agregar foto de ruta", "addfoto"),
@@ -499,7 +500,7 @@ class LegajosGUIV2(BaseApp):
         help_frame.pack(fill="x", padx=8, pady=(0, 6))
         ttk.Label(
             help_frame,
-            text="Usa Ctrl o Shift para seleccionar varias estaciones. Solo se usa en: Crear estructura, Agregar ruta y Agregar convenio DZ."
+            text="Usa Ctrl o Shift para seleccionar varias estaciones. Se usa en: Crear estructura, Agregar ruta, Agregar mantenimiento grupal y Agregar convenio DZ."
         ).pack(anchor="w")
 
         exec_frame = ttk.Frame(self.main)
@@ -710,6 +711,7 @@ class LegajosGUIV2(BaseApp):
         self.current_action = action
         names = {
             "add": "Agregar informe correctivo individual",
+            "addmantenimiento_grupal": "Agregar mantenimiento grupal",
             "addchecklist": "Agregar checklist de ruta",
             "addestado_situacional": "Agregar estado situacional de ruta",
             "addfoto": "Agregar foto de ruta",
@@ -726,22 +728,22 @@ class LegajosGUIV2(BaseApp):
     def apply_action_visibility(self):
         action = self.current_action
 
-        src_enabled = action in {"add", "addchecklist", "addestado_situacional", "addruta", "addconvenio_dz"}
+        src_enabled = action in {"add", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addruta", "addconvenio_dz"}
         self.set_enabled(self.src_field.entry, src_enabled)
         self.set_enabled(self.src_field.button, src_enabled)
 
-        self.set_enabled(self.fecha_entry, action in {"add", "addchecklist", "addestado_situacional", "addfoto", "addruta", "addconvenio_dz"})
+        self.set_enabled(self.fecha_entry, action in {"add", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addfoto", "addruta", "addconvenio_dz"})
         self.set_enabled(self.codigo_entry, action in {"add", "addchecklist", "addestado_situacional", "addfoto", "index"})
         self.set_enabled(self.categoria_combo, action == "add")
         self.set_enabled(self.ruta_entry, action in {"addruta", "addchecklist", "addestado_situacional", "addfoto"})
         self.set_enabled(self.tipo_combo, action == "addruta")
         self.set_enabled(self.years_entry, action == "init")
-        self.set_enabled(self.responsable_entry, action == "addruta")
-        self.set_enabled(self.obs_entry, action in {"addruta", "addconvenio_dz"})
+        self.set_enabled(self.responsable_entry, action in {"addruta", "addmantenimiento_grupal"})
+        self.set_enabled(self.obs_entry, action in {"addruta", "addmantenimiento_grupal", "addconvenio_dz"})
         self.set_enabled(self.index_year_entry, action == "index")
         self.set_enabled(self.filename_entry, action == "addficha_dz")
 
-        stations_enabled = action in {"init", "addruta", "addconvenio_dz"}
+        stations_enabled = action in {"init", "addruta", "addmantenimiento_grupal", "addconvenio_dz"}
         self.set_enabled(self.station_listbox, stations_enabled)
         self.set_enabled(self.search_station_entry, stations_enabled)
 
@@ -1066,11 +1068,11 @@ class LegajosGUIV2(BaseApp):
         if not os.path.isfile(SCRIPT_DEFAULT):
             return False, f"No se encontró LEGAJOS_codigo.py en:\n{SCRIPT_DEFAULT}"
 
-        if action in {"add", "addchecklist", "addestado_situacional", "addfoto", "addruta", "addconvenio_dz", "init", "index"}:
+        if action in {"add", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addfoto", "addruta", "addconvenio_dz", "init", "index"}:
             if not os.path.isfile(MAESTRA_DEFAULT):
                 return False, f"No se encontró el Excel maestro en:\n{MAESTRA_DEFAULT}"
 
-        if action in {"add", "addchecklist", "addestado_situacional", "addruta", "addconvenio_dz"}:
+        if action in {"add", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addruta", "addconvenio_dz"}:
             src = os.path.realpath(self.src_field.entry.get().strip())
             if not src:
                 return False, "Selecciona el archivo fuente"
@@ -1081,7 +1083,7 @@ class LegajosGUIV2(BaseApp):
             if not self.get_photo_paths():
                 return False, "Debes cargar al menos un archivo en las casillas."
 
-        if action in {"add", "addchecklist", "addestado_situacional", "addfoto", "addruta", "addconvenio_dz"}:
+        if action in {"add", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addfoto", "addruta", "addconvenio_dz"}:
             if not self.fecha_entry.get().strip():
                 return False, "Selecciona una fecha"
 
@@ -1163,6 +1165,23 @@ class LegajosGUIV2(BaseApp):
                 "--fecha", self.fecha_entry.get().strip(),
                 "--maestra", MAESTRA_DEFAULT
             ]
+            if self.copy_mode_var.get() == "copy":
+                command += ["--copy"]
+
+        elif action == "addmantenimiento_grupal":
+            command += [
+                "--src", src,
+                "--dz", self.dz_var.get(),
+                "--fecha", self.fecha_entry.get().strip()
+            ]
+            selected_codes = self.get_selected_station_codes()
+            if selected_codes:
+                command += ["--estaciones", ",".join(selected_codes)]
+            command += ["--maestra", MAESTRA_DEFAULT]
+            if self.responsable_var.get().strip():
+                command += ["--responsable", self.responsable_var.get().strip()]
+            if self.obs_var.get().strip():
+                command += ["--obs", self.obs_var.get().strip()]
             if self.copy_mode_var.get() == "copy":
                 command += ["--copy"]
 

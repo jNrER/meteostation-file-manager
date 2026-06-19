@@ -10,7 +10,8 @@ LEGAJOS_codigo.py — Gestor de legajos para SGR/DRD SENAMHI
 - Incluye MANTENIMIENTO con la estructura:
     - CORRECTIVO_INDIVIDUAL
     - RUTA_XX (archivos de checklist, estado situacional y fotos juntos)
-- Comandos: init, add, addruta, addconvenio_dz, addchecklist,
+    - MANTENIMIENTO_GRUPAL a nivel DZ/año para informes que incluyen varias estaciones sin ruta
+- Comandos: init, add, addmantenimiento_grupal, addruta, addconvenio_dz, addchecklist,
             addestado_situacional, addfoto, addficha_dz, index, mk_ficha_dz.
 """
 
@@ -86,6 +87,7 @@ CATEGORIAS_ESTACION = [
 
 ESTADO_SITUACIONAL_LABEL = "ESTADO SITUACIONAL DE LA ESTACIÓN PREVIA AL MANTENIMIENTO"
 CORRECTIVO_INDIVIDUAL_DIRNAME = "CORRECTIVO_INDIVIDUAL"
+MANTENIMIENTO_GRUPAL_DIRNAME = "MANTENIMIENTO_GRUPAL"
 
 RUTAS_TIPOS = ["MANTENIMIENTOS", "AFOROS", "INSPECCION"]
 RUTA_SINGULAR = {"MANTENIMIENTOS": "MANTENIMIENTO", "AFOROS": "AFORO", "INSPECCION": "INSPECCION"}
@@ -110,7 +112,8 @@ NS_MAIN = {"a": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
 # UTILIDADES
 # =========================
 def slug(s: str) -> str:
-    s = unicodedata.normalize("NFC", s)
+    s = s.replace("Á", "A").replace("É", "E").replace("Í", "I").replace("Ó", "O").replace("Ú", "U")
+    s = s.replace("á", "a").replace("é", "e").replace("í", "i").replace("ó", "o").replace("ú", "u")
     s = s.strip().replace(" ", "_")
     s = re.sub(r'["\'\(\)\[\]\{\}:;,]', '', s)
     return s
@@ -293,6 +296,10 @@ def rutas_dir(dz: str, year: int | str) -> Path:
     return year_dir(dz, year) / "RUTAS"
 
 
+def mantenimiento_grupal_dir(dz: str, year: int | str) -> Path:
+    return year_dir(dz, year) / MANTENIMIENTO_GRUPAL_DIRNAME
+
+
 def rutas_cat_dir(dz: str, year: int | str, tipo: str) -> Path:
     return rutas_dir(dz, year) / tipo
 
@@ -416,6 +423,26 @@ def read_legacy_csv_as_dicts(path: Path) -> list[dict]:
         return []
 
 
+def mantenimiento_grupal_index_path(dz: str, year: int | str) -> Path:
+    return mantenimiento_grupal_dir(dz, year) / f"legajo_mantenimiento_grupal_index_{dz.upper()}_{int(year):04d}.xlsx"
+
+
+def mantenimiento_grupal_index_path_legacy(dz: str, year: int | str) -> Path:
+    return mantenimiento_grupal_dir(dz, year) / "legajo_mantenimiento_grupal_index.xlsx"
+
+
+def ensure_mantenimiento_grupal_indices(dz: str, year: int | str):
+    headers = ["DZ", "Año", "Archivo", "Path", "Estaciones_incluidas", "Fecha_ejecucion", "Responsable", "Observaciones"]
+    write_xlsx_if_missing(mantenimiento_grupal_index_path(dz, year), headers)
+    write_xlsx_if_missing(mantenimiento_grupal_index_path_legacy(dz, year), headers)
+
+
+def append_mantenimiento_grupal_index_rows(dz: str, year: int | str, row: list):
+    ensure_mantenimiento_grupal_indices(dz, year)
+    append_xlsx_row(mantenimiento_grupal_index_path(dz, year), row)
+    append_xlsx_row(mantenimiento_grupal_index_path_legacy(dz, year), row)
+
+
 def rutas_index_path(dz: str, year: int | str) -> Path:
     return rutas_dir(dz, year) / f"legajo_rutas_index_{dz.upper()}_{int(year):04d}.xlsx"
 
@@ -471,6 +498,11 @@ def build_filename_ruta(ruta: str, tipo: str, fecha: datetime, ext: str) -> str:
     return f"{ruta}_{tipo_singular}_{fecha.date()}.{ext.lstrip('.').lower()}"
 
 
+def build_filename_mantenimiento_grupal(dz: str, src_stem: str, fecha: datetime, ext: str) -> str:
+    nombre_base = slug(src_stem) or "INFORME"
+    return f"MANTENIMIENTO_GRUPAL_{dz.upper()}_{nombre_base}_{fecha.date()}.{ext.lstrip('.').lower()}"
+
+
 def build_filename_checklist(ruta: str, dz: str, station_meta: dict[str, str], fecha: datetime, ext: str) -> str:
     return f"CHECKLIST_MANTENIMIENTO_{ruta.upper()}_{dz.upper()}_{station_meta['folder_name']}_{fecha.date()}.{ext.lstrip('.').lower()}"
 
@@ -501,7 +533,7 @@ def write_estacion_readme(dz: str, year: int | str, station_meta: dict[str, str]
         f"- Nombre: {station_meta['nombre']}\n"
         f"- Carpeta estación: {station_meta['folder_name']}\n"
         "- Estructura: AAAA/ESTACION/CATEGORIA/archivo\n"
-        f"- MANTENIMIENTO usa: '{CORRECTIVO_INDIVIDUAL_DIRNAME}' para correctivos puntuales y 'RUTA_XX' para evidencias de ruta.\n"
+        f"- MANTENIMIENTO usa: '{CORRECTIVO_INDIVIDUAL_DIRNAME}' para correctivos puntuales y 'RUTA_XX' para evidencias de ruta. Los informes grupales sin ruta se guardan en DZ/AÑO/{MANTENIMIENTO_GRUPAL_DIRNAME}.\n"
         "- Importante: al ingresar fechas use siempre DD-MM-YYYY.\n"
     )
     (d / "README.md").write_text(txt, encoding="utf-8")
@@ -664,6 +696,53 @@ def add_report_ruta(src: Path, dz: str, ruta: str, tipo: str, fecha_str_ddmmyyyy
 
     return dst
 
+
+
+def add_mantenimiento_grupal(src: Path, dz: str, fecha_str_ddmmyyyy: str,
+                             codigos_estaciones: list[str] | None = None,
+                             maestra_xlsx: Path = STATIONS_XLSX_DEFAULT,
+                             responsable: str = "", obs: str = "", copy=False):
+    """
+    Registra un informe de mantenimiento que involucra varias estaciones,
+    sin obligarlo a pertenecer a una ruta.
+
+    Guarda un solo archivo a nivel DZ/año/MANTENIMIENTO_GRUPAL y agrega
+    una referencia en el índice de cada estación seleccionada.
+    """
+    if not src.exists():
+        raise FileNotFoundError(f"No existe el archivo fuente: {src}")
+
+    fecha = parse_fecha_ddmmyyyy(fecha_str_ddmmyyyy)
+    year = fecha.year
+    ext = src.suffix[1:] if src.suffix else "pdf"
+
+    dest_dir = mantenimiento_grupal_dir(dz, year)
+    ensure_dirs(dest_dir)
+    ensure_mantenimiento_grupal_indices(dz, year)
+
+    fname = build_filename_mantenimiento_grupal(dz, src.stem, fecha, ext)
+    dst = dest_dir / fname
+
+    if copy:
+        shutil.copy2(src, dst)
+    else:
+        shutil.move(str(src), str(dst))
+
+    estaciones_meta = [get_station_meta(c, maestra_xlsx) for c in (codigos_estaciones or [])]
+    estaciones_str = ", ".join(meta["folder_name"] for meta in estaciones_meta)
+    relpath = os.path.relpath(dst, start=mantenimiento_grupal_dir(dz, year))
+    row = [dz.upper(), f"{int(year):04d}", fname, relpath, estaciones_str, fecha_str_ddmmyyyy, responsable, obs]
+    append_mantenimiento_grupal_index_rows(dz, year, row)
+
+    if estaciones_meta:
+        for meta in estaciones_meta:
+            base_est = estacion_dir(dz, year, meta)
+            ensure_dirs(base_est)
+            write_estacion_readme(dz, year, meta)
+            rel_from_station = os.path.relpath(dst, start=base_est)
+            add_reference_to_stations(dz, year, [meta], "MANTENIMIENTO_GRUPAL", fname, rel_from_station)
+
+    return dst
 
 def add_convenio_dz(src: Path, dz: str, fecha_str_ddmmyyyy: str, codigos_estaciones: list[str] | None = None,
                     maestra_xlsx: Path = STATIONS_XLSX_DEFAULT, obs: str = "", copy: bool = False):
@@ -838,6 +917,10 @@ def init_structure(dz: str, years=(2024, 2025), codigos_estaciones=None, maestra
             if not idx_explicit.exists():
                 shutil.copy2(idx_legacy, idx_explicit)
             write_estacion_readme(dz, y, meta)
+        mgdir = mantenimiento_grupal_dir(dz, y)
+        ensure_dirs(mgdir)
+        ensure_mantenimiento_grupal_indices(dz, y)
+
         rdir = rutas_dir(dz, y)
         ensure_dirs(rdir)
         for t in RUTAS_TIPOS:
@@ -990,6 +1073,16 @@ def main():
     p_add.add_argument("--maestra", default=str(STATIONS_XLSX_DEFAULT), help="Excel maestro de estaciones")
     p_add.add_argument("--copy", action="store_const", const=True, default=None, help="Copiar en lugar de mover")
 
+    p_addmg = sub.add_parser("addmantenimiento_grupal", help="Registrar un informe de mantenimiento grupal sin ruta")
+    p_addmg.add_argument("--src", required=True, help="Archivo fuente")
+    p_addmg.add_argument("--dz", help="Ej: DZ06")
+    p_addmg.add_argument("--fecha", help="DD-MM-YYYY")
+    p_addmg.add_argument("--estaciones", help="Códigos de estaciones incluidos separados por coma")
+    p_addmg.add_argument("--maestra", default=str(STATIONS_XLSX_DEFAULT), help="Excel maestro de estaciones")
+    p_addmg.add_argument("--responsable", default="")
+    p_addmg.add_argument("--obs", default="")
+    p_addmg.add_argument("--copy", action="store_const", const=True, default=None)
+
     p_addr = sub.add_parser("addruta", help="Registrar un informe por RUTA")
     p_addr.add_argument("--src", required=True, help="Archivo fuente")
     p_addr.add_argument("--dz", help="Ej: DZ06")
@@ -1066,6 +1159,18 @@ def main():
         categoria, dzv, codigo, fecha, copy = interactive_for_estacion(args)
         dst = add_report_estacion(src, categoria, dzv, codigo, fecha, Path(args.maestra).expanduser(), copy)
         print(f"✅ Informe por estación agregado: {dst}")
+
+    elif args.cmd == "addmantenimiento_grupal":
+        src = Path(args.src).expanduser()
+        if not src.exists():
+            print(f"❌ No existe el archivo fuente: {src}", file=sys.stderr); sys.exit(1)
+        maestra = Path(args.maestra).expanduser()
+        dzv = args.dz or prompt_dz()
+        fecha = args.fecha or prompt_fecha_ddmmyyyy()
+        codigos = [x.strip() for x in (args.estaciones or "").split(",") if x.strip()] or prompt_codigos_estaciones(maestra)
+        copy = args.copy if args.copy is not None else prompt_copy()
+        dst = add_mantenimiento_grupal(src, dzv, fecha, codigos, maestra, args.responsable, args.obs, copy)
+        print(f"✅ Mantenimiento grupal agregado: {dst}")
 
     elif args.cmd == "addruta":
         src = Path(args.src).expanduser()
