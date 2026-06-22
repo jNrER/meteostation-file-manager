@@ -251,7 +251,8 @@ class LegajosGUIV2(BaseApp):
 
         buttons = [
             ("Agregar informe correctivo individual", "add"),
-            ("Agregar mantenimiento grupal", "addmantenimiento_grupal"),
+            ("Agregar mantenimiento grupal sin ruta", "addmantenimiento_grupal"),
+            ("Agregar matrícula de estación", "addmatricula"),
             ("Agregar checklist de ruta", "addchecklist"),
             ("Agregar estado situacional de ruta", "addestado_situacional"),
             ("Agregar foto de ruta", "addfoto"),
@@ -711,7 +712,8 @@ class LegajosGUIV2(BaseApp):
         self.current_action = action
         names = {
             "add": "Agregar informe correctivo individual",
-            "addmantenimiento_grupal": "Agregar mantenimiento grupal",
+            "addmantenimiento_grupal": "Agregar mantenimiento grupal sin ruta",
+            "addmatricula": "Agregar matrícula de estación",
             "addchecklist": "Agregar checklist de ruta",
             "addestado_situacional": "Agregar estado situacional de ruta",
             "addfoto": "Agregar foto de ruta",
@@ -728,12 +730,12 @@ class LegajosGUIV2(BaseApp):
     def apply_action_visibility(self):
         action = self.current_action
 
-        src_enabled = action in {"add", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addruta", "addconvenio_dz"}
+        src_enabled = action in {"add", "addmatricula", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addruta", "addconvenio_dz"}
         self.set_enabled(self.src_field.entry, src_enabled)
         self.set_enabled(self.src_field.button, src_enabled)
 
-        self.set_enabled(self.fecha_entry, action in {"add", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addfoto", "addruta", "addconvenio_dz"})
-        self.set_enabled(self.codigo_entry, action in {"add", "addchecklist", "addestado_situacional", "addfoto", "index"})
+        self.set_enabled(self.fecha_entry, action in {"add", "addmatricula", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addfoto", "addruta", "addconvenio_dz"})
+        self.set_enabled(self.codigo_entry, action in {"add", "addmatricula", "addchecklist", "addestado_situacional", "addfoto", "index"})
         self.set_enabled(self.categoria_combo, action == "add")
         self.set_enabled(self.ruta_entry, action in {"addruta", "addchecklist", "addestado_situacional", "addfoto"})
         self.set_enabled(self.tipo_combo, action == "addruta")
@@ -747,7 +749,7 @@ class LegajosGUIV2(BaseApp):
         self.set_enabled(self.station_listbox, stations_enabled)
         self.set_enabled(self.search_station_entry, stations_enabled)
 
-        single_station_enabled = action in {"add", "addchecklist", "addestado_situacional", "addfoto", "index"}
+        single_station_enabled = action in {"add", "addmatricula", "addchecklist", "addestado_situacional", "addfoto", "index"}
         self.set_enabled(self.search_single_station_entry, single_station_enabled)
         self.set_enabled(self.single_station_listbox, single_station_enabled)
 
@@ -759,7 +761,7 @@ class LegajosGUIV2(BaseApp):
             self.set_enabled(row.btn_up, photos_enabled)
             self.set_enabled(row.btn_down, photos_enabled)
 
-        if self.codigo_var.get().strip() and action in {"add", "addchecklist", "addestado_situacional", "addfoto", "index"}:
+        if self.codigo_var.get().strip() and action in {"add", "addmatricula", "addchecklist", "addestado_situacional", "addfoto", "index"}:
             try:
                 self.codigo_entry.configure(state="disabled")
             except Exception:
@@ -1068,11 +1070,11 @@ class LegajosGUIV2(BaseApp):
         if not os.path.isfile(SCRIPT_DEFAULT):
             return False, f"No se encontró LEGAJOS_codigo.py en:\n{SCRIPT_DEFAULT}"
 
-        if action in {"add", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addfoto", "addruta", "addconvenio_dz", "init", "index"}:
+        if action in {"add", "addmatricula", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addfoto", "addruta", "addconvenio_dz", "init", "index"}:
             if not os.path.isfile(MAESTRA_DEFAULT):
                 return False, f"No se encontró el Excel maestro en:\n{MAESTRA_DEFAULT}"
 
-        if action in {"add", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addruta", "addconvenio_dz"}:
+        if action in {"add", "addmatricula", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addruta", "addconvenio_dz"}:
             src = os.path.realpath(self.src_field.entry.get().strip())
             if not src:
                 return False, "Selecciona el archivo fuente"
@@ -1083,11 +1085,11 @@ class LegajosGUIV2(BaseApp):
             if not self.get_photo_paths():
                 return False, "Debes cargar al menos un archivo en las casillas."
 
-        if action in {"add", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addfoto", "addruta", "addconvenio_dz"}:
+        if action in {"add", "addmatricula", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addfoto", "addruta", "addconvenio_dz"}:
             if not self.fecha_entry.get().strip():
                 return False, "Selecciona una fecha"
 
-        if action in {"add", "addchecklist", "addestado_situacional", "addfoto", "index"}:
+        if action in {"add", "addmatricula", "addchecklist", "addestado_situacional", "addfoto", "index"}:
             if not self.codigo_var.get().strip():
                 return False, "Ingresa el código de estación"
 
@@ -1124,6 +1126,17 @@ class LegajosGUIV2(BaseApp):
             command += [
                 "--src", src,
                 "--categoria", self.categoria_var.get(),
+                "--dz", self.dz_var.get(),
+                "--codigo", self.codigo_var.get().strip(),
+                "--fecha", self.fecha_entry.get().strip(),
+                "--maestra", MAESTRA_DEFAULT
+            ]
+            if self.copy_mode_var.get() == "copy":
+                command += ["--copy"]
+
+        elif action == "addmatricula":
+            command += [
+                "--src", src,
                 "--dz", self.dz_var.get(),
                 "--codigo", self.codigo_var.get().strip(),
                 "--fecha", self.fecha_entry.get().strip(),

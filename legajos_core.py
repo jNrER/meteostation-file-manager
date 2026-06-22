@@ -10,8 +10,9 @@ LEGAJOS_codigo.py — Gestor de legajos para SGR/DRD SENAMHI
 - Incluye MANTENIMIENTO con la estructura:
     - CORRECTIVO_INDIVIDUAL
     - RUTA_XX (archivos de checklist, estado situacional y fotos juntos)
-    - MANTENIMIENTO_GRUPAL a nivel DZ/año para informes que incluyen varias estaciones sin ruta
-- Comandos: init, add, addmantenimiento_grupal, addruta, addconvenio_dz, addchecklist,
+    - MANTENIMIENTO_GRUPAL_SIN_RUTA a nivel DZ/año para informes que incluyen varias estaciones sin ruta
+- Incluye MATRICULAS como sección por estación para actas, fichas e informes de matrícula
+- Comandos: init, add, addmatricula, addmantenimiento_grupal, addruta, addconvenio_dz, addchecklist,
             addestado_situacional, addfoto, addficha_dz, index, mk_ficha_dz.
 """
 
@@ -83,11 +84,12 @@ CATEGORIAS_ESTACION = [
     "CALIDAD_DATOS",
     "INCIDENCIAS",
     "INSTALACIONES_NUEVAS",
+    "MATRICULAS",
 ]
 
 ESTADO_SITUACIONAL_LABEL = "ESTADO SITUACIONAL DE LA ESTACIÓN PREVIA AL MANTENIMIENTO"
 CORRECTIVO_INDIVIDUAL_DIRNAME = "CORRECTIVO_INDIVIDUAL"
-MANTENIMIENTO_GRUPAL_DIRNAME = "MANTENIMIENTO_GRUPAL"
+MANTENIMIENTO_GRUPAL_DIRNAME = "MANTENIMIENTO_GRUPAL_SIN_RUTA"
 
 RUTAS_TIPOS = ["MANTENIMIENTOS", "AFOROS", "INSPECCION"]
 RUTA_SINGULAR = {"MANTENIMIENTOS": "MANTENIMIENTO", "AFOROS": "AFORO", "INSPECCION": "INSPECCION"}
@@ -500,7 +502,7 @@ def build_filename_ruta(ruta: str, tipo: str, fecha: datetime, ext: str) -> str:
 
 def build_filename_mantenimiento_grupal(dz: str, src_stem: str, fecha: datetime, ext: str) -> str:
     nombre_base = slug(src_stem) or "INFORME"
-    return f"MANTENIMIENTO_GRUPAL_{dz.upper()}_{nombre_base}_{fecha.date()}.{ext.lstrip('.').lower()}"
+    return f"MANTENIMIENTO_GRUPAL_SIN_RUTA_{dz.upper()}_{nombre_base}_{fecha.date()}.{ext.lstrip('.').lower()}"
 
 
 def build_filename_checklist(ruta: str, dz: str, station_meta: dict[str, str], fecha: datetime, ext: str) -> str:
@@ -706,7 +708,7 @@ def add_mantenimiento_grupal(src: Path, dz: str, fecha_str_ddmmyyyy: str,
     Registra un informe de mantenimiento que involucra varias estaciones,
     sin obligarlo a pertenecer a una ruta.
 
-    Guarda un solo archivo a nivel DZ/año/MANTENIMIENTO_GRUPAL y agrega
+    Guarda un solo archivo a nivel DZ/año/MANTENIMIENTO_GRUPAL_SIN_RUTA y agrega
     una referencia en el índice de cada estación seleccionada.
     """
     if not src.exists():
@@ -740,7 +742,7 @@ def add_mantenimiento_grupal(src: Path, dz: str, fecha_str_ddmmyyyy: str,
             ensure_dirs(base_est)
             write_estacion_readme(dz, year, meta)
             rel_from_station = os.path.relpath(dst, start=base_est)
-            add_reference_to_stations(dz, year, [meta], "MANTENIMIENTO_GRUPAL", fname, rel_from_station)
+            add_reference_to_stations(dz, year, [meta], "MANTENIMIENTO_GRUPAL_SIN_RUTA", fname, rel_from_station)
 
     return dst
 
@@ -1073,6 +1075,14 @@ def main():
     p_add.add_argument("--maestra", default=str(STATIONS_XLSX_DEFAULT), help="Excel maestro de estaciones")
     p_add.add_argument("--copy", action="store_const", const=True, default=None, help="Copiar en lugar de mover")
 
+    p_mat = sub.add_parser("addmatricula", help="Registrar un documento de MATRÍCULA por estación")
+    p_mat.add_argument("--src", required=True, help="Archivo fuente")
+    p_mat.add_argument("--dz", help="Ej: DZ06")
+    p_mat.add_argument("--codigo", help="Código de la estación")
+    p_mat.add_argument("--fecha", help="DD-MM-YYYY")
+    p_mat.add_argument("--maestra", default=str(STATIONS_XLSX_DEFAULT), help="Excel maestro de estaciones")
+    p_mat.add_argument("--copy", action="store_const", const=True, default=None, help="Copiar en lugar de mover")
+
     p_addmg = sub.add_parser("addmantenimiento_grupal", help="Registrar un informe de mantenimiento grupal sin ruta")
     p_addmg.add_argument("--src", required=True, help="Archivo fuente")
     p_addmg.add_argument("--dz", help="Ej: DZ06")
@@ -1160,6 +1170,18 @@ def main():
         dst = add_report_estacion(src, categoria, dzv, codigo, fecha, Path(args.maestra).expanduser(), copy)
         print(f"✅ Informe por estación agregado: {dst}")
 
+    elif args.cmd == "addmatricula":
+        src = Path(args.src).expanduser()
+        if not src.exists():
+            print(f"❌ No existe el archivo fuente: {src}", file=sys.stderr); sys.exit(1)
+        maestra = Path(args.maestra).expanduser()
+        dzv = args.dz or prompt_dz()
+        codigo = args.codigo or prompt_codigo_estacion(maestra)
+        fecha = args.fecha or prompt_fecha_ddmmyyyy()
+        copy = args.copy if args.copy is not None else prompt_copy()
+        dst = add_report_estacion(src, "MATRICULAS", dzv, codigo, fecha, maestra, copy)
+        print(f"✅ Documento de matrícula agregado: {dst}")
+
     elif args.cmd == "addmantenimiento_grupal":
         src = Path(args.src).expanduser()
         if not src.exists():
@@ -1170,7 +1192,7 @@ def main():
         codigos = [x.strip() for x in (args.estaciones or "").split(",") if x.strip()] or prompt_codigos_estaciones(maestra)
         copy = args.copy if args.copy is not None else prompt_copy()
         dst = add_mantenimiento_grupal(src, dzv, fecha, codigos, maestra, args.responsable, args.obs, copy)
-        print(f"✅ Mantenimiento grupal agregado: {dst}")
+        print(f"✅ Mantenimiento grupal sin ruta agregado: {dst}")
 
     elif args.cmd == "addruta":
         src = Path(args.src).expanduser()
