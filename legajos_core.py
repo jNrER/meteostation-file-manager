@@ -83,7 +83,7 @@ CATEGORIAS_ESTACION = [
     "INSPECCION",
     "CALIBRACION",
     "CLASIFICACION_EMPLAZAMIENTO",
-    "COMPROBACION_SENSOR",
+    "CERTIFICADO_COMPROBACION_SENSOR",
     "AFOROS",
     "CALIDAD_DATOS",
     "INCIDENCIAS",
@@ -103,7 +103,7 @@ DOCUMENTAL_CATEGORIES = [
     "INSTALACION_ESTACION",
     "CONVENIOS",
     "IOARR",
-    "COMPROBACION_SENSOR",
+    "CERTIFICADO_COMPROBACION_SENSOR",
     "CLASIFICACION_EMPLAZAMIENTO",
     "CESE_OBSERVADOR",
     "SINIESTROS",
@@ -119,7 +119,7 @@ DOCUMENTAL_DISPLAY = {
     "INSTALACION_EQUIPO": "INSTALACIÓN DE EQUIPO",
     "CONVENIOS": "CONVENIO",
     "IOARR": "IOARR",
-    "COMPROBACION_SENSOR": "COMPROBACIÓN DE SENSOR",
+    "CERTIFICADO_COMPROBACION_SENSOR": "CERTIFICADO DE COMPROBACIÓN DE SENSOR",
     "CLASIFICACION_EMPLAZAMIENTO": "CLASIFICACIÓN DE EMPLAZAMIENTO",
     "CESE_OBSERVADOR": "CESE DE OBSERVADOR",
     "SINIESTROS": "SINIESTRO",
@@ -625,9 +625,9 @@ def build_filename_estacion(categoria: str, dz: str, station_meta: dict[str, str
     return f"{categoria}_{dz.upper()}_{station_meta['folder_name']}_{fecha.date()}.{ext.lstrip('.').lower()}"
 
 
-def build_filename_comprobacion_sensor(variable_sensor: str, dz: str, station_meta: dict[str, str], fecha: datetime, ext: str) -> str:
+def build_filename_certificado_comprobacion_sensor(variable_sensor: str, dz: str, station_meta: dict[str, str], fecha: datetime, ext: str) -> str:
     variable = slug(str(variable_sensor).upper().strip()) or "OTRO"
-    return f"COMPROBACION_SENSOR_{variable}_{dz.upper()}_{station_meta['folder_name']}_{fecha.date()}.{ext.lstrip('.').lower()}"
+    return f"CERTIFICADO_COMPROBACION_SENSOR_{variable}_{dz.upper()}_{station_meta['folder_name']}_{fecha.date()}.{ext.lstrip('.').lower()}"
 
 
 def build_filename_ruta(ruta: str, tipo: str, fecha: datetime, ext: str) -> str:
@@ -814,12 +814,12 @@ def add_report_estacion(src: Path, categoria: str, dz: str, codigo: str, fecha_s
             subtipo = "OTRO"
         dest_dir = cat_dir_estacion(dz, year, station_meta, categoria) / subtipo
         fname = build_filename_estacion(categoria, dz, station_meta, fecha, ext)
-    elif categoria == "COMPROBACION_SENSOR":
+    elif categoria == "CERTIFICADO_COMPROBACION_SENSOR":
         variable = (variable_sensor or "OTRO").upper().strip()
         if variable not in SENSOR_VARIABLES:
             variable = "OTRO"
-        dest_dir = cat_dir_estacion(dz, year, station_meta, categoria) / variable
-        fname = build_filename_comprobacion_sensor(variable, dz, station_meta, fecha, ext)
+        dest_dir = cat_dir_estacion(dz, year, station_meta, categoria)
+        fname = build_filename_certificado_comprobacion_sensor(variable, dz, station_meta, fecha, ext)
     else:
         dest_dir = cat_dir_estacion(dz, year, station_meta, categoria)
         fname = build_filename_estacion(categoria, dz, station_meta, fecha, ext)
@@ -1363,7 +1363,7 @@ def generar_reporte_documental_anual(dz: str, year: int | str, maestra_xlsx: Pat
         "INSTALACION_ESTACION": "INST_ESTACION",
         "CONVENIOS": "CONVENIOS",
         "IOARR": "IOARR",
-        "COMPROBACION_SENSOR": "COMPROB_SENSOR",
+        "CERTIFICADO_COMPROBACION_SENSOR": "COMPROB_SENSOR",
         "CLASIFICACION_EMPLAZAMIENTO": "CLASIF_EMPLAZAMIENTO",
         "CESE_OBSERVADOR": "CESE_OBSERVADOR",
         "SINIESTROS": "SINIESTROS",
@@ -1582,7 +1582,7 @@ def main():
     p_add.add_argument("--maestra", default=str(STATIONS_XLSX_DEFAULT), help="Excel maestro de estaciones")
     p_add.add_argument("--copy", action="store_const", const=True, default=None, help="Copiar en lugar de mover")
     p_add.add_argument("--subtipo-siniestro", choices=SINIESTRO_SUBTIPOS, default="OTRO", help="Solo aplica cuando la categoría es SINIESTROS")
-    p_add.add_argument("--variable-sensor", choices=SENSOR_VARIABLES, default="OTRO", help="Solo aplica cuando la categoría es COMPROBACION_SENSOR")
+    p_add.add_argument("--variable-sensor", choices=SENSOR_VARIABLES, default="OTRO", help="Solo aplica cuando la categoría es CERTIFICADO_COMPROBACION_SENSOR")
 
     p_mat = sub.add_parser("addmatricula", help="Registrar documentos de INSTALACIÓN por estación")
     p_mat.add_argument("--src", help="Archivo fuente único, mantenido por compatibilidad")

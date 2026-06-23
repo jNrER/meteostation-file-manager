@@ -41,7 +41,7 @@ CATEGORIAS_ESTACION = [
     "INSPECCION",
     "CALIBRACION",
     "CLASIFICACION_EMPLAZAMIENTO",
-    "COMPROBACION_SENSOR",
+    "CERTIFICADO_COMPROBACION_SENSOR",
     "AFOROS",
     "CALIDAD_DATOS",
     "INCIDENCIAS",
@@ -1174,7 +1174,7 @@ class LegajosGUIV2(BaseApp):
         self.set_enabled(self.index_year_entry, action in {"index", "reporte_documental_anual"})
         self.set_enabled(self.filename_entry, action == "addficha_dz")
         self.set_enabled(self.siniestro_subtipo_combo, action == "add" and self.categoria_var.get() == "SINIESTROS")
-        self.set_enabled(self.variable_sensor_combo, action == "add" and self.categoria_var.get() == "COMPROBACION_SENSOR")
+        self.set_enabled(self.variable_sensor_combo, action == "add" and self.categoria_var.get() == "CERTIFICADO_COMPROBACION_SENSOR")
         self.set_enabled(self.nombre_ioarr_entry, action == "addioarr")
         self.set_enabled(self.tipo_doc_ioarr_combo, False)
 
@@ -1622,8 +1622,8 @@ class LegajosGUIV2(BaseApp):
         if action == "reporte_documental_anual" and not self.index_year_var.get().strip():
             return False, "Ingresa el año para generar el reporte documental anual"
 
-        if action == "add" and self.categoria_var.get() == "COMPROBACION_SENSOR" and not self.variable_sensor_var.get().strip():
-            return False, "Selecciona la variable/sensor para la comprobación"
+        if action == "add" and self.categoria_var.get() == "CERTIFICADO_COMPROBACION_SENSOR" and not self.variable_sensor_var.get().strip():
+            return False, "Selecciona la variable/sensor para el certificado de comprobación"
 
 
         if action == "addioarr" and not self.nombre_ioarr_var.get().strip():
@@ -1663,7 +1663,7 @@ class LegajosGUIV2(BaseApp):
             ]
             if self.categoria_var.get() == "SINIESTROS":
                 command += ["--subtipo-siniestro", self.siniestro_subtipo_var.get()]
-            if self.categoria_var.get() == "COMPROBACION_SENSOR":
+            if self.categoria_var.get() == "CERTIFICADO_COMPROBACION_SENSOR":
                 command += ["--variable-sensor", self.variable_sensor_var.get()]
             if self.copy_mode_var.get() == "copy":
                 command += ["--copy"]
