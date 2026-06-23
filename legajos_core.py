@@ -12,8 +12,7 @@ LEGAJOS_codigo.py — Gestor de legajos para SGR/DRD SENAMHI
     - RUTA_XX (archivos de checklist, estado situacional y fotos juntos)
     - MANTENIMIENTO_GRUPAL_SIN_RUTA a nivel DZ/año para informes que incluyen varias estaciones sin ruta
 - Incluye INSTALACION_ESTACION como sección por estación para actas, fichas e informes de matrícula
-- Incluye CLAUSURA_ESTACION como sección documental por estación
-- Comandos: init, add, addmatricula, addmantenimiento_grupal, addruta, addconvenio_dz, addchecklist,
+- Comandos: init, add, addmatricula, addmantenimiento_grupal, addruta, addconvenio_dz, addioarr, addchecklist,
             addestado_situacional, addfoto, addficha_dz, reporte_documental_anual, index, mk_ficha_dz.
 """
 
@@ -101,6 +100,7 @@ CATEGORIAS_ESTACION = [
 DOCUMENTAL_CATEGORIES = [
     "INSTALACION_ESTACION",
     "CONVENIOS",
+    "IOARR",
     "CESE_OBSERVADOR",
     "SINIESTROS",
     "REUBICACION",
@@ -114,6 +114,7 @@ DOCUMENTAL_DISPLAY = {
     "INSTALACION_ESTACION": "INSTALACIÓN DE ESTACIÓN",
     "INSTALACION_EQUIPO": "INSTALACIÓN DE EQUIPO",
     "CONVENIOS": "CONVENIO",
+    "IOARR": "IOARR",
     "CESE_OBSERVADOR": "CESE DE OBSERVADOR",
     "SINIESTROS": "SINIESTRO",
     "REUBICACION": "REUBICACIÓN",
@@ -142,6 +143,20 @@ RUTA_SINGULAR = {"MANTENIMIENTOS": "MANTENIMIENTO", "AFOROS": "AFORO", "INSPECCI
 
 DZ_CONVENIOS_DIRNAME = "CONVENIOS"
 FICHA_MATRICULA_DIRNAME = "Ficha de Matricula"
+
+IOARR_DIRNAME = "IOARR"
+
+IOARR_DOC_TYPES = [
+    "NOTA_ELEVACION_DHI",
+    "INFORME_DHI",
+    "NOTA_ELEVACION_SGR",
+    "INFORME_SGR",
+    "INFORME_DRD",
+    "INFORME_TECNICO",
+    "FORMATO_07C",
+    "PRESUPUESTO",
+    "OTRO",
+]
 
 MATRICULA_DOC_TYPES = [
     "ACTA_INSTALACION",
@@ -377,6 +392,23 @@ def reporte_documental_anual_dir(dz: str, year: int | str) -> Path:
 def reporte_documental_anual_path(dz: str, year: int | str) -> Path:
     return reporte_documental_anual_dir(dz, year) / f"reporte_documental_anual_{dz.upper()}_{int(year):04d}.xlsx"
 
+
+def ioarr_root_dir(dz: str, year: int | str) -> Path:
+    return year_dir(dz, year) / IOARR_DIRNAME
+
+
+def ioarr_project_dir(dz: str, year: int | str, nombre_ioarr: str) -> Path:
+    nombre = slug(str(nombre_ioarr).strip()) or "SIN_NOMBRE"
+    return ioarr_root_dir(dz, year) / nombre
+
+
+def ioarr_index_path(dz: str, year: int | str) -> Path:
+    return ioarr_root_dir(dz, year) / f"legajo_ioarr_index_{dz.upper()}_{int(year):04d}.xlsx"
+
+
+def ioarr_index_path_legacy(dz: str, year: int | str) -> Path:
+    return ioarr_root_dir(dz, year) / "legajo_ioarr_index.xlsx"
+
 # =========================
 # ÍNDICES / XLSX
 # =========================
@@ -552,6 +584,23 @@ def append_dz_convenios_row(dz: str, row: list):
     append_xlsx_row(dz_convenios_index_path(dz), row)
     append_xlsx_row(dz_convenios_index_path_legacy(dz), row)
 
+
+
+def ensure_ioarr_indices(dz: str, year: int | str):
+    headers = [
+        "DZ", "Año", "Nombre_IOARR", "Tipo_documento",
+        "Archivo", "Path", "Estaciones_incluidas", "Fecha", "Observaciones"
+    ]
+    ensure_dirs(ioarr_root_dir(dz, year))
+    write_xlsx_if_missing(ioarr_index_path(dz, year), headers)
+    write_xlsx_if_missing(ioarr_index_path_legacy(dz, year), headers)
+
+
+def append_ioarr_index_row(dz: str, year: int | str, row: list):
+    ensure_ioarr_indices(dz, year)
+    append_xlsx_row(ioarr_index_path(dz, year), row)
+    append_xlsx_row(ioarr_index_path_legacy(dz, year), row)
+
 # =========================
 # NOMBRES DE ARCHIVO
 # =========================
@@ -567,6 +616,13 @@ def build_filename_ruta(ruta: str, tipo: str, fecha: datetime, ext: str) -> str:
 def build_filename_mantenimiento_grupal(dz: str, src_stem: str, fecha: datetime, ext: str) -> str:
     nombre_base = slug(src_stem) or "INFORME"
     return f"MANTENIMIENTO_GRUPAL_SIN_RUTA_{dz.upper()}_{nombre_base}_{fecha.date()}.{ext.lstrip('.').lower()}"
+
+
+
+def build_filename_ioarr(dz: str, tipo_documento: str, nombre_ioarr: str, fecha: datetime, ext: str) -> str:
+    tipo = slug(str(tipo_documento).upper().strip()) or "OTRO"
+    nombre = slug(str(nombre_ioarr).strip()) or "SIN_NOMBRE"
+    return f"IOARR_{dz.upper()}_{tipo}-{nombre}_{fecha.date()}.{ext.lstrip('.').lower()}"
 
 
 def build_filename_checklist(ruta: str, dz: str, station_meta: dict[str, str], fecha: datetime, ext: str) -> str:
@@ -933,6 +989,107 @@ def add_convenio_dz(src: Path, dz: str, fecha_str_ddmmyyyy: str, codigos_estacio
     return dst
 
 
+
+def add_ioarr_documento(src: Path, dz: str, fecha_str_ddmmyyyy: str,
+                        nombre_ioarr: str, tipo_documento: str,
+                        codigos_estaciones: list[str] | None = None,
+                        maestra_xlsx: Path = STATIONS_XLSX_DEFAULT,
+                        obs: str = "", copy: bool = False):
+    """
+    Registra un documento IOARR a nivel DZ/año/IOARR/codigo-nombre_ioarr
+    y agrega referencias en el índice de cada estación involucrada.
+
+    Ejemplo de archivo final:
+    IOARR_DZ11_FORMATO_07C-PUENTE_BRENA-TULUMAYO_2025-10-03.pdf
+    """
+    if not src.exists():
+        raise FileNotFoundError(f"No existe el archivo fuente: {src}")
+
+    fecha = parse_fecha_ddmmyyyy(fecha_str_ddmmyyyy)
+    year = fecha.year
+    ext = src.suffix[1:] if src.suffix else "pdf"
+
+    tipo_documento = (tipo_documento or "OTRO").upper().strip()
+    if tipo_documento not in IOARR_DOC_TYPES:
+        tipo_documento = "OTRO"
+
+    dest_dir = ioarr_project_dir(dz, year, nombre_ioarr)
+    ensure_dirs(dest_dir)
+    ensure_ioarr_indices(dz, year)
+
+    fname = build_filename_ioarr(dz, tipo_documento, nombre_ioarr, fecha, ext)
+    dst = dest_dir / fname
+
+    counter = 2
+    original_stem = dst.stem
+    original_suffix = dst.suffix
+    while dst.exists():
+        dst = dest_dir / f"{original_stem}_{counter:02d}{original_suffix}"
+        counter += 1
+    fname = dst.name
+
+    if copy:
+        shutil.copy2(src, dst)
+    else:
+        shutil.move(str(src), str(dst))
+
+    estaciones_meta = [get_station_meta(c, maestra_xlsx) for c in (codigos_estaciones or [])]
+    estaciones_str = ", ".join(meta["folder_name"] for meta in estaciones_meta)
+
+    relpath = os.path.relpath(dst, start=ioarr_root_dir(dz, year))
+    row = [
+        dz.upper(), f"{int(year):04d}", str(nombre_ioarr).strip(),
+        tipo_documento, fname, relpath, estaciones_str, fecha_str_ddmmyyyy, obs
+    ]
+    append_ioarr_index_row(dz, year, row)
+
+    if estaciones_meta:
+        for meta in estaciones_meta:
+            base_est = estacion_dir(dz, year, meta)
+            ensure_dirs(base_est)
+            write_estacion_readme(dz, year, meta)
+            rel_from_station = os.path.relpath(dst, start=base_est)
+            add_reference_to_stations(dz, year, [meta], "IOARR", fname, rel_from_station)
+
+    return dst
+
+
+def add_ioarr_documentos(srcs: list[Path], tipos_documento: list[str],
+                         dz: str, fecha_str_ddmmyyyy: str,
+                         nombre_ioarr: str,
+                         codigos_estaciones: list[str] | None = None,
+                         maestra_xlsx: Path = STATIONS_XLSX_DEFAULT,
+                         obs: str = "", copy: bool = False) -> list[Path]:
+    """
+    Registra varios documentos IOARR en una sola ejecución.
+
+    Guarda los archivos en:
+    DZ/AÑO/IOARR/NOMBRE_IOARR/
+    """
+    if not srcs:
+        raise ValueError("Debes indicar al menos un documento IOARR.")
+
+    if len(tipos_documento) != len(srcs):
+        raise ValueError("La cantidad de tipos de documento debe coincidir con la cantidad de archivos IOARR.")
+
+    destinos = []
+    for src, tipo_doc in zip(srcs, tipos_documento):
+        src = Path(src).expanduser()
+        dst = add_ioarr_documento(
+            src=src,
+            dz=dz,
+            fecha_str_ddmmyyyy=fecha_str_ddmmyyyy,
+            nombre_ioarr=nombre_ioarr,
+            tipo_documento=tipo_doc,
+            codigos_estaciones=codigos_estaciones,
+            maestra_xlsx=maestra_xlsx,
+            obs=obs,
+            copy=copy
+        )
+        destinos.append(dst)
+
+    return destinos
+
 def add_checklist_estacion(src: Path, dz: str, ruta: str, codigo: str, fecha_str_ddmmyyyy: str, maestra_xlsx: Path, copy=False):
     if not src.exists():
         raise FileNotFoundError(f"No existe el archivo fuente: {src}")
@@ -1124,18 +1281,19 @@ def generar_reporte_documental_anual(dz: str, year: int | str, maestra_xlsx: Pat
                     ruta = os.path.relpath(f, start=base_year)
                     _append_doc_rows(rows_by_category, resumen_keys, year, dz, meta, categoria, f.name, ruta, "")
 
-        # Convenios referenciados en el índice anual de la estación.
+        # Documentos DZ/año referenciados en el índice anual de la estación.
+        # Incluye CONVENIOS e IOARR para evitar duplicar archivos en cada estación.
         index_path = station_path / "legajo_index.xlsx"
         for row in read_xlsx_as_dicts(index_path):
             cat = str(row.get("categoria", "") or "").upper().strip()
-            if cat != "CONVENIOS":
+            if cat not in {"CONVENIOS", "IOARR"}:
                 continue
             row_year = str(row.get("year", "") or "").strip()
             if row_year and row_year != f"{year:04d}" and row_year != str(year):
                 continue
             archivo = str(row.get("filename", "") or "").strip()
             ruta = str(row.get("relpath", "") or "").strip()
-            _append_doc_rows(rows_by_category, resumen_keys, year, dz, meta, "CONVENIOS", archivo, ruta, "")
+            _append_doc_rows(rows_by_category, resumen_keys, year, dz, meta, cat, archivo, ruta, "")
 
     resumen_rows = [list(k) for k in sorted(resumen_keys, key=lambda x: (x[1], x[2], x[5], x[6]))]
     detalle_rows = []
@@ -1164,6 +1322,7 @@ def generar_reporte_documental_anual(dz: str, year: int | str, maestra_xlsx: Pat
     sheet_names = {
         "INSTALACION_ESTACION": "INST_ESTACION",
         "CONVENIOS": "CONVENIOS",
+        "IOARR": "IOARR",
         "CESE_OBSERVADOR": "CESE_OBSERVADOR",
         "SINIESTROS": "SINIESTROS",
         "REUBICACION": "REUBICACION",
@@ -1231,6 +1390,9 @@ def init_structure(dz: str, years=(2024, 2025), codigos_estaciones=None, maestra
         for t in RUTAS_TIPOS:
             ensure_dirs(rdir / t)
         ensure_rutas_indices(dz, y)
+
+        ensure_dirs(ioarr_root_dir(dz, y))
+        ensure_ioarr_indices(dz, y)
 
 # =========================
 # PROMPTS
@@ -1421,6 +1583,21 @@ def main():
     p_add_dz.add_argument("--obs", default="")
     p_add_dz.add_argument("--copy", action="store_const", const=True, default=None)
 
+
+    p_ioarr = sub.add_parser("addioarr", help="Registrar un documento IOARR a nivel DZ/año y referenciar estaciones")
+    p_ioarr.add_argument("--src", help="Archivo fuente único, mantenido por compatibilidad")
+    p_ioarr.add_argument("--srcs", nargs="+", help="Archivos fuente IOARR")
+    p_ioarr.add_argument("--dz", help="Ej: DZ11")
+    p_ioarr.add_argument("--fecha", help="DD-MM-YYYY")
+    p_ioarr.add_argument("--nombre-ioarr", required=True, help="Nombre corto para la carpeta, ej: PUENTE_BRENA-TULUMAYO")
+    p_ioarr.add_argument("--tipo-documento", choices=IOARR_DOC_TYPES, default="OTRO", help="Tipo de documento IOARR para archivo único")
+    p_ioarr.add_argument("--tipos-documento", nargs="+", choices=IOARR_DOC_TYPES, help="Tipos de documento IOARR para varios archivos")
+    p_ioarr.add_argument("--tipos-documento", nargs="+", choices=IOARR_DOC_TYPES, help="Tipos de documento IOARR para varios archivos")
+    p_ioarr.add_argument("--estaciones", default="", help="Códigos de estaciones incluidos separados por coma")
+    p_ioarr.add_argument("--maestra", default=str(STATIONS_XLSX_DEFAULT), help="Excel maestro de estaciones")
+    p_ioarr.add_argument("--obs", default="")
+    p_ioarr.add_argument("--copy", action="store_const", const=True, default=None)
+
     p_addcl = sub.add_parser("addchecklist", help="Agregar un Checklist a MANTENIMIENTO/RUTA_XX")
     p_addcl.add_argument("--src", required=True)
     p_addcl.add_argument("--dz")
@@ -1536,6 +1713,45 @@ def main():
         dzv, fecha, codigos, copy = interactive_for_convenio_dz(args)
         dst = add_convenio_dz(src, dzv, fecha, codigos, Path(args.maestra).expanduser(), args.obs or "", copy)
         print(f"✅ Convenio general de DZ agregado: {dst}")
+
+    elif args.cmd == "addioarr":
+        src_values = args.srcs or ([args.src] if args.src else [])
+        if not src_values:
+            print("❌ Debes indicar --srcs archivo1 archivo2 ... o --src archivo", file=sys.stderr); sys.exit(1)
+
+        srcs = [Path(x).expanduser() for x in src_values]
+        for src in srcs:
+            if not src.exists():
+                print(f"❌ No existe el archivo fuente: {src}", file=sys.stderr); sys.exit(1)
+
+        if args.tipos_documento:
+            tipos = args.tipos_documento
+            if len(tipos) != len(srcs):
+                print("❌ La cantidad de --tipos-documento debe coincidir con la cantidad de --srcs", file=sys.stderr); sys.exit(1)
+        else:
+            tipos = [args.tipo_documento or "OTRO"] * len(srcs)
+
+        maestra = Path(args.maestra).expanduser()
+        dzv = args.dz or prompt_dz()
+        fecha = args.fecha or prompt_fecha_ddmmyyyy()
+        codigos = [x.strip() for x in (args.estaciones or "").split(",") if x.strip()] or prompt_codigos_estaciones(maestra)
+        copy = args.copy if args.copy is not None else prompt_copy()
+
+        destinos = add_ioarr_documentos(
+            srcs=srcs,
+            tipos_documento=tipos,
+            dz=dzv,
+            fecha_str_ddmmyyyy=fecha,
+            nombre_ioarr=args.nombre_ioarr,
+            codigos_estaciones=codigos,
+            maestra_xlsx=maestra,
+            obs=args.obs or "",
+            copy=copy
+        )
+
+        print("✅ Documentos IOARR agregados:")
+        for dst in destinos:
+            print(f"   - {dst}")
 
     elif args.cmd == "addchecklist":
         src = Path(args.src).expanduser()

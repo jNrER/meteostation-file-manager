@@ -63,6 +63,19 @@ SINIESTRO_SUBTIPOS = [
 ]
 
 
+IOARR_DOC_TYPES = [
+    "NOTA_ELEVACION_DHI",
+    "INFORME_DHI",
+    "NOTA_ELEVACION_SGR",
+    "INFORME_SGR",
+    "INFORME_DRD",
+    "INFORME_TECNICO",
+    "FORMATO_07C",
+    "PRESUPUESTO",
+    "OTRO",
+]
+
+
 def slug_text(text):
     text = str(text or "").strip()
     repl = {"Á":"A","É":"E","Í":"I","Ó":"O","Ú":"U","á":"a","é":"e","í":"i","ó":"o","ú":"u","Ñ":"N","ñ":"n"}
@@ -308,6 +321,86 @@ class MatriculaDocRow(ttk.Frame):
             pass
 
 
+
+class IoarrDocRow(ttk.Frame):
+    def __init__(self, master, idx, remove_callback):
+        super().__init__(master)
+        self.idx = idx
+        self.remove_callback = remove_callback
+
+        self.path_var = tk.StringVar()
+        self.tipo_var = tk.StringVar(value="INFORME_TECNICO")
+
+        self.label = ttk.Label(self, text=f"Doc IOARR {idx}:", width=14)
+        self.label.grid(row=0, column=0, padx=5, pady=4, sticky="w")
+
+        self.entry = ttk.Entry(self, textvariable=self.path_var, width=64)
+        self.entry.grid(row=0, column=1, padx=5, pady=4, sticky="ew")
+
+        self.btn_select = ttk.Button(self, text="Seleccionar", command=self.pick)
+        self.btn_select.grid(row=0, column=2, padx=3, pady=4)
+
+        ttk.Label(self, text="Tipo:").grid(row=0, column=3, padx=(12, 3), pady=4, sticky="w")
+        self.tipo_combo = ttk.Combobox(
+            self,
+            textvariable=self.tipo_var,
+            values=IOARR_DOC_TYPES,
+            state="readonly",
+            width=24
+        )
+        self.tipo_combo.grid(row=0, column=4, padx=3, pady=4, sticky="w")
+
+        self.btn_remove = ttk.Button(self, text="Quitar", command=lambda: self.remove_callback(self))
+        self.btn_remove.grid(row=0, column=5, padx=5, pady=4)
+
+        self.columnconfigure(1, weight=1)
+
+        if DND_OK:
+            self.entry.drop_target_register(DND_FILES)
+            self.entry.dnd_bind("<<Drop>>", self.on_drop)
+
+    def on_drop(self, event):
+        value = event.data.strip()
+        if value.startswith("{") and value.endswith("}"):
+            value = value[1:-1]
+        if "} {" in value:
+            value = value.split("} {")[0].strip("{}")
+        self.path_var.set(os.path.realpath(value))
+
+    def pick(self):
+        path = filedialog.askopenfilename(
+            filetypes=[
+                ("PDF y documentos", "*.pdf *.xlsx *.xls *.doc *.docx *.jpg *.jpeg *.png"),
+                ("PDF", "*.pdf"),
+                ("Todos", "*.*"),
+            ]
+        )
+        if path:
+            self.path_var.set(os.path.realpath(path))
+
+    def get_path(self):
+        return self.path_var.get().strip()
+
+    def get_tipo(self):
+        return self.tipo_var.get().strip() or "OTRO"
+
+    def set_index(self, idx):
+        self.idx = idx
+        self.label.configure(text=f"Doc IOARR {idx}:")
+
+    def set_enabled(self, enabled=True):
+        state = "normal" if enabled else "disabled"
+        readonly_state = "readonly" if enabled else "disabled"
+        for widget in (self.entry, self.btn_select, self.btn_remove):
+            try:
+                widget.configure(state=state)
+            except Exception:
+                pass
+        try:
+            self.tipo_combo.configure(state=readonly_state)
+        except Exception:
+            pass
+
 class LegajosGUIV2(BaseApp):
     def __init__(self):
         super().__init__()
@@ -327,6 +420,7 @@ class LegajosGUIV2(BaseApp):
 
         self.photo_rows = []
         self.matricula_rows = []
+        self.ioarr_rows = []
         self.temp_generated_file = None
         self.action_buttons = []
 
@@ -394,6 +488,7 @@ class LegajosGUIV2(BaseApp):
             ("Agregar foto de ruta", "addfoto"),
             ("Agregar ruta", "addruta"),
             ("Agregar convenio DZ", "addconvenio_dz"),
+            ("Agregar documento IOARR", "addioarr"),
             ("Generar reporte documental anual", "reporte_documental_anual"),
             ("Crear estructura", "init"),
             ("Reconstruir índice", "index"),
@@ -548,6 +643,25 @@ class LegajosGUIV2(BaseApp):
         self.siniestro_subtipo_combo = ttk.Combobox(row5, textvariable=self.siniestro_subtipo_var, values=SINIESTRO_SUBTIPOS, state="readonly", width=30)
         self.siniestro_subtipo_combo.grid(row=0, column=3, padx=5, pady=5, sticky="w")
 
+        row6 = ttk.Frame(form)
+        row6.pack(fill="x", padx=8, pady=6)
+
+        ttk.Label(row6, text="Nombre IOARR:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
+        self.nombre_ioarr_var = tk.StringVar(value="PUENTE_BRENA-TULUMAYO")
+        self.nombre_ioarr_entry = ttk.Entry(row6, textvariable=self.nombre_ioarr_var, width=38)
+        self.nombre_ioarr_entry.grid(row=0, column=1, padx=5, pady=5, sticky="w")
+
+        ttk.Label(row6, text="Tipo doc IOARR:").grid(row=0, column=2, padx=15, pady=5, sticky="w")
+        self.tipo_doc_ioarr_var = tk.StringVar(value="INFORME_TECNICO")
+        self.tipo_doc_ioarr_combo = ttk.Combobox(
+            row6,
+            textvariable=self.tipo_doc_ioarr_var,
+            values=IOARR_DOC_TYPES,
+            state="readonly",
+            width=24
+        )
+        self.tipo_doc_ioarr_combo.grid(row=0, column=3, padx=5, pady=5, sticky="w")
+
         single_station_frame = ttk.LabelFrame(self.main, text="Buscar estación para acciones individuales")
         single_station_frame.pack(fill="x", pady=8)
 
@@ -600,6 +714,25 @@ class LegajosGUIV2(BaseApp):
 
         for _ in range(3):
             self.add_matricula_row()
+
+        self.ioarr_frame = ttk.LabelFrame(self.main, text="Documentos IOARR")
+        self.ioarr_frame.pack(fill="x", pady=8)
+
+        ioarr_top = ttk.Frame(self.ioarr_frame)
+        ioarr_top.pack(fill="x", padx=8, pady=6)
+
+        ttk.Button(ioarr_top, text="Agregar documento IOARR", command=self.add_ioarr_row).pack(side="left", padx=5)
+        ttk.Button(ioarr_top, text="Quitar último", command=self.remove_last_ioarr_row).pack(side="left", padx=5)
+        ttk.Label(
+            ioarr_top,
+            text="Carga uno o varios documentos IOARR y asigna el tipo documental a cada archivo."
+        ).pack(side="left", padx=10)
+
+        self.ioarr_rows_container = ttk.Frame(self.ioarr_frame)
+        self.ioarr_rows_container.pack(fill="x", padx=8, pady=6)
+
+        for _ in range(4):
+            self.add_ioarr_row()
 
         self.photos_frame = ttk.LabelFrame(self.main, text="Fotos para unir en orden (solo para Agregar foto)")
         self.photos_frame.pack(fill="x", pady=8)
@@ -655,7 +788,7 @@ class LegajosGUIV2(BaseApp):
         help_frame.pack(fill="x", padx=8, pady=(0, 6))
         ttk.Label(
             help_frame,
-            text="Usa Ctrl o Shift para seleccionar varias estaciones. Se usa en: Crear estructura, Agregar ruta, Agregar mantenimiento grupal y Agregar convenio DZ."
+            text="Usa Ctrl o Shift para seleccionar varias estaciones. Se usa en: Crear estructura, Agregar ruta, Agregar mantenimiento grupal, Agregar convenio DZ y Agregar documento IOARR."
         ).pack(anchor="w")
 
         exec_frame = ttk.Frame(self.main)
@@ -859,6 +992,42 @@ class LegajosGUIV2(BaseApp):
         for btn in self.action_buttons:
             btn.configure(state="disabled" if running else "normal")
 
+    def add_ioarr_row(self):
+        row = IoarrDocRow(
+            self.ioarr_rows_container,
+            len(self.ioarr_rows) + 1,
+            self.remove_ioarr_row,
+        )
+        row.pack(fill="x", pady=2)
+        self.ioarr_rows.append(row)
+
+    def remove_ioarr_row(self, row):
+        if len(self.ioarr_rows) <= 1:
+            messagebox.showinfo("IOARR", "Debe quedar al menos una fila de documento IOARR.")
+            return
+        row.destroy()
+        self.ioarr_rows.remove(row)
+        self.rebuild_ioarr_rows()
+
+    def remove_last_ioarr_row(self):
+        if self.ioarr_rows:
+            self.remove_ioarr_row(self.ioarr_rows[-1])
+
+    def rebuild_ioarr_rows(self):
+        for widget in self.ioarr_rows_container.winfo_children():
+            widget.pack_forget()
+        for i, row in enumerate(self.ioarr_rows, start=1):
+            row.set_index(i)
+            row.pack(fill="x", pady=2)
+
+    def get_ioarr_docs(self):
+        docs = []
+        for row in self.ioarr_rows:
+            path = row.get_path()
+            if path:
+                docs.append((path, row.get_tipo()))
+        return docs
+
     def add_photo_row(self):
         row = MultiPhotoRow(
             self.photos_rows_container,
@@ -952,6 +1121,7 @@ class LegajosGUIV2(BaseApp):
             "addfoto": "Agregar foto de ruta",
             "addruta": "Agregar ruta",
             "addconvenio_dz": "Agregar convenio DZ",
+            "addioarr": "Agregar documento IOARR",
             "reporte_documental_anual": "Generar reporte documental anual",
             "init": "Crear estructura",
             "index": "Reconstruir índice",
@@ -968,19 +1138,21 @@ class LegajosGUIV2(BaseApp):
         self.set_enabled(self.src_field.entry, src_enabled)
         self.set_enabled(self.src_field.button, src_enabled)
 
-        self.set_enabled(self.fecha_entry, action in {"add", "addmatricula", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addfoto", "addruta", "addconvenio_dz"})
+        self.set_enabled(self.fecha_entry, action in {"add", "addmatricula", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addfoto", "addruta", "addconvenio_dz", "addioarr"})
         self.set_enabled(self.codigo_entry, action in {"add", "addmatricula", "addchecklist", "addestado_situacional", "addfoto", "index"})
         self.set_enabled(self.categoria_combo, action == "add")
         self.set_enabled(self.ruta_entry, action in {"addruta", "addchecklist", "addestado_situacional", "addfoto"})
         self.set_enabled(self.tipo_combo, action == "addruta")
         self.set_enabled(self.years_entry, action == "init")
         self.set_enabled(self.responsable_entry, action in {"addruta", "addmantenimiento_grupal"})
-        self.set_enabled(self.obs_entry, action in {"addruta", "addmantenimiento_grupal", "addconvenio_dz"})
+        self.set_enabled(self.obs_entry, action in {"addruta", "addmantenimiento_grupal", "addconvenio_dz", "addioarr"})
         self.set_enabled(self.index_year_entry, action in {"index", "reporte_documental_anual"})
         self.set_enabled(self.filename_entry, action == "addficha_dz")
         self.set_enabled(self.siniestro_subtipo_combo, action == "add" and self.categoria_var.get() == "SINIESTROS")
+        self.set_enabled(self.nombre_ioarr_entry, action == "addioarr")
+        self.set_enabled(self.tipo_doc_ioarr_combo, False)
 
-        stations_enabled = action in {"init", "addruta", "addmantenimiento_grupal", "addconvenio_dz"}
+        stations_enabled = action in {"init", "addruta", "addmantenimiento_grupal", "addconvenio_dz", "addioarr"}
         self.set_enabled(self.station_listbox, stations_enabled)
         self.set_enabled(self.search_station_entry, stations_enabled)
 
@@ -997,6 +1169,15 @@ class LegajosGUIV2(BaseApp):
                 self.matricula_frame.pack_forget()
         for row in getattr(self, "matricula_rows", []):
             row.set_enabled(matricula_enabled)
+
+        ioarr_enabled = action == "addioarr"
+        if hasattr(self, "ioarr_frame"):
+            if ioarr_enabled:
+                self.ioarr_frame.pack(fill="x", pady=8, after=self.matricula_frame)
+            else:
+                self.ioarr_frame.pack_forget()
+        for row in getattr(self, "ioarr_rows", []):
+            row.set_enabled(ioarr_enabled)
 
         photos_enabled = action == "addfoto"
         for row in self.photo_rows:
@@ -1293,6 +1474,8 @@ class LegajosGUIV2(BaseApp):
         self.copy_mode_var.set("move")
         self.overwrite_var.set(False)
         self.siniestro_subtipo_var.set("ROBO")
+        self.nombre_ioarr_var.set("PUENTE_BRENA-TULUMAYO")
+        self.tipo_doc_ioarr_var.set("INFORME_TECNICO")
 
         self.station_listbox.delete(0, "end")
         self.station_items_all = []
@@ -1324,7 +1507,7 @@ class LegajosGUIV2(BaseApp):
         if not os.path.isfile(SCRIPT_DEFAULT):
             return False, f"No se encontró LEGAJOS_codigo.py en:\n{SCRIPT_DEFAULT}"
 
-        if action in {"add", "addmatricula", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addfoto", "addruta", "addconvenio_dz", "init", "index", "reporte_documental_anual"}:
+        if action in {"add", "addmatricula", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addfoto", "addruta", "addconvenio_dz", "addioarr", "init", "index", "reporte_documental_anual"}:
             if not os.path.isfile(MAESTRA_DEFAULT):
                 return False, f"No se encontró el Excel maestro en:\n{MAESTRA_DEFAULT}"
 
@@ -1345,11 +1528,21 @@ class LegajosGUIV2(BaseApp):
                 if not nombre.strip():
                     return False, "Cada documento de matrícula debe tener un nombre final"
 
+        if action == "addioarr":
+            docs = self.get_ioarr_docs()
+            if not docs:
+                return False, "Agrega al menos un documento IOARR"
+            for path, tipo in docs:
+                if not os.path.isfile(path):
+                    return False, f"No existe el documento IOARR:\n{path}"
+                if not tipo.strip():
+                    return False, "Cada documento IOARR debe tener un tipo documental"
+
         if action == "addfoto":
             if not self.get_photo_paths():
                 return False, "Debes cargar al menos un archivo en las casillas."
 
-        if action in {"add", "addmatricula", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addfoto", "addruta", "addconvenio_dz"}:
+        if action in {"add", "addmatricula", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addfoto", "addruta", "addconvenio_dz", "addioarr"}:
             if not self.fecha_entry.get().strip():
                 return False, "Selecciona una fecha"
 
@@ -1365,6 +1558,10 @@ class LegajosGUIV2(BaseApp):
 
         if action == "reporte_documental_anual" and not self.index_year_var.get().strip():
             return False, "Ingresa el año para generar el reporte documental anual"
+
+
+        if action == "addioarr" and not self.nombre_ioarr_var.get().strip():
+            return False, "Ingresa el nombre corto de la IOARR, por ejemplo PUENTE_BRENA-TULUMAYO"
 
         return True, ""
 
@@ -1498,6 +1695,27 @@ class LegajosGUIV2(BaseApp):
                 "--src", src,
                 "--dz", self.dz_var.get(),
                 "--fecha", self.fecha_entry.get().strip()
+            ]
+            selected_codes = self.get_selected_station_codes()
+            if selected_codes:
+                command += ["--estaciones", ",".join(selected_codes)]
+            command += ["--maestra", MAESTRA_DEFAULT]
+            if self.obs_var.get().strip():
+                command += ["--obs", self.obs_var.get().strip()]
+            if self.copy_mode_var.get() == "copy":
+                command += ["--copy"]
+
+        elif action == "addioarr":
+            docs = self.get_ioarr_docs()
+            srcs = [d[0] for d in docs]
+            tipos = [d[1] for d in docs]
+
+            command += ["--srcs", *srcs]
+            command += ["--tipos-documento", *tipos]
+            command += [
+                "--dz", self.dz_var.get(),
+                "--fecha", self.fecha_entry.get().strip(),
+                "--nombre-ioarr", self.nombre_ioarr_var.get().strip(),
             ]
             selected_codes = self.get_selected_station_codes()
             if selected_codes:
