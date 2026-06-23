@@ -12,6 +12,7 @@ LEGAJOS_codigo.py — Gestor de legajos para SGR/DRD SENAMHI
     - RUTA_XX (archivos de checklist, estado situacional y fotos juntos)
     - MANTENIMIENTO_GRUPAL_SIN_RUTA a nivel DZ/año para informes que incluyen varias estaciones sin ruta
 - Incluye INSTALACION_ESTACION como sección por estación para actas, fichas e informes de matrícula
+- Incluye CLAUSURA_ESTACION como sección documental por estación
 - Comandos: init, add, addmatricula, addmantenimiento_grupal, addruta, addconvenio_dz, addchecklist,
             addestado_situacional, addfoto, addficha_dz, reporte_documental_anual, index, mk_ficha_dz.
 """
@@ -93,6 +94,7 @@ CATEGORIAS_ESTACION = [
     "REUBICACION",
     "SOLICITUD_REUBICACION",
     "BAJA_ESTACION",
+    "CLAUSURA_ESTACION",
     "ACTUALIZACION_METADATA",
 ]
 
@@ -104,6 +106,7 @@ DOCUMENTAL_CATEGORIES = [
     "REUBICACION",
     "SOLICITUD_REUBICACION",
     "BAJA_ESTACION",
+    "CLAUSURA_ESTACION",
     "ACTUALIZACION_METADATA",
 ]
 
@@ -116,6 +119,7 @@ DOCUMENTAL_DISPLAY = {
     "REUBICACION": "REUBICACIÓN",
     "SOLICITUD_REUBICACION": "SOLICITUD DE REUBICACIÓN",
     "BAJA_ESTACION": "BAJA DE ESTACIÓN",
+    "CLAUSURA_ESTACION": "CLAUSURA DE ESTACIÓN",
     "ACTUALIZACION_METADATA": "ACTUALIZACIÓN DE METADATA",
 }
 
@@ -1165,6 +1169,7 @@ def generar_reporte_documental_anual(dz: str, year: int | str, maestra_xlsx: Pat
         "REUBICACION": "REUBICACION",
         "SOLICITUD_REUBICACION": "SOLICITUD_REUBICACION",
         "BAJA_ESTACION": "BAJA_ESTACION",
+        "CLAUSURA_ESTACION": "CLAUSURA_ESTACION",
         "ACTUALIZACION_METADATA": "ACT_METADATA",
     }
     # Crea pestañas específicas solo cuando existe al menos un archivo de esa sección.
