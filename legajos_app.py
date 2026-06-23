@@ -66,7 +66,7 @@ SINIESTRO_SUBTIPOS = [
 
 SENSOR_VARIABLES = [
     "TEMPERATURA",
-    "HUMEDAD",
+    "HUMEDAD_RELATIVA",
     "PRECIPITACION",
     "RADIACION_SOLAR",
     "RADIACION_UV",
@@ -1518,6 +1518,71 @@ class LegajosGUIV2(BaseApp):
         ttk.Button(btns, text="Limpiar todas", command=limpiar_todas).pack(side="left", padx=5)
         ttk.Button(btns, text="Cerrar", command=win.destroy).pack(side="right", padx=5)
 
+    def clear_after_success(self):
+        """
+        Limpia campos sensibles después de ejecutar correctamente una acción,
+        para evitar reutilizar estaciones o archivos por error.
+
+        Mantiene:
+        - acción actual
+        - DZ
+        - fecha
+        - ruta
+
+        Limpia:
+        - archivo fuente
+        - estaciones seleccionadas
+        - fotos/documentos múltiples
+        - nombre IOARR
+        """
+        # Limpiar archivo fuente
+        if hasattr(self, "src_var"):
+            self.src_var.set("")
+
+        # Limpiar estación individual
+        if hasattr(self, "station_search_var"):
+            self.station_search_var.set("")
+        if hasattr(self, "station_code_var"):
+            self.station_code_var.set("")
+
+        # Limpiar selección múltiple de estaciones
+        if hasattr(self, "selected_station_codes"):
+            self.selected_station_codes.clear()
+        if hasattr(self, "station_listbox"):
+            try:
+                self.station_listbox.selection_clear(0, tk.END)
+            except Exception:
+                pass
+
+        # Refrescar lista visible si existe
+        if hasattr(self, "filter_station_list"):
+            try:
+                self.filter_station_list()
+            except Exception:
+                pass
+
+        # Limpiar fotos si existen
+        if hasattr(self, "photo_rows"):
+            self.photo_rows.clear()
+            if hasattr(self, "rebuild_photo_rows"):
+                self.rebuild_photo_rows()
+
+        # Limpiar documentos IOARR si existen
+        if hasattr(self, "ioarr_rows"):
+            self.ioarr_rows.clear()
+            if hasattr(self, "rebuild_ioarr_rows"):
+                self.rebuild_ioarr_rows()
+            if hasattr(self, "add_ioarr_row"):
+                self.add_ioarr_row()
+
+        # Limpiar nombre IOARR autogenerado
+        if hasattr(self, "nombre_ioarr_var"):
+            self.nombre_ioarr_var.set("")
+
+        # Mantener variable/sensor en un valor seguro por defecto
+        if hasattr(self, "variable_sensor_var"):
+            self.variable_sensor_var.set("TEMPERATURA")
+
     def clear_form(self):
         if self.is_running:
             return
@@ -1881,6 +1946,7 @@ class LegajosGUIV2(BaseApp):
 
             if process.returncode == 0:
                 self.after(0, self.log, "\n✅ Proceso finalizado correctamente.\n")
+                self.clear_after_success()
                 self.after(0, lambda: messagebox.showinfo("Éxito", "Proceso finalizado correctamente."))
             else:
                 self.after(0, self.log, f"\n❌ El proceso terminó con código {process.returncode}\n")
