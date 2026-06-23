@@ -8,12 +8,12 @@ LEGAJOS_codigo.py — Gestor de legajos para SGR/DRD SENAMHI
 - Las carpetas de estación se construyen como: CODIGO-CLASIFICACION-NOMBRE
   usando un Excel maestro con columnas: Código, Nombre, Clasificación.
 - Incluye MANTENIMIENTO con la estructura:
-    - CORRECTIVO_INDIVIDUAL
+    - MANTENIMIENTO_INDIVIDUAL (informes, checklist y estado situacional de una estación)
     - RUTA_XX (archivos de checklist, estado situacional y fotos juntos)
     - MANTENIMIENTO_GRUPAL_SIN_RUTA a nivel DZ/año para informes que incluyen varias estaciones sin ruta
-- Incluye MATRICULAS como sección por estación para actas, fichas e informes de matrícula
+- Incluye INSTALACION como sección por estación para actas, fichas e informes de matrícula
 - Comandos: init, add, addmatricula, addmantenimiento_grupal, addruta, addconvenio_dz, addchecklist,
-            addestado_situacional, addfoto, addficha_dz, index, mk_ficha_dz.
+            addestado_situacional, addfoto, addficha_dz, reporte_documental_anual, index, mk_ficha_dz.
 """
 
 import argparse
@@ -78,17 +78,57 @@ if not STATIONS_XLSX_DEFAULT.is_absolute():
 
 CATEGORIAS_ESTACION = [
     "MANTENIMIENTO",
+    "CHECKLIST_MANTENIMIENTO",
+    "ESTADO_SITUACIONAL",
     "INSPECCION",
     "CALIBRACION",
     "AFOROS",
     "CALIDAD_DATOS",
     "INCIDENCIAS",
     "INSTALACIONES_NUEVAS",
-    "MATRICULAS",
+    "INSTALACION",
+    "CESE_OBSERVADOR",
+    "SINIESTROS",
+    "REUBICACION",
+    "SOLICITUD_REUBICACION",
+    "BAJA_ESTACION",
+    "ACTUALIZACION_METADATA",
 ]
 
+DOCUMENTAL_CATEGORIES = [
+    "INSTALACION",
+    "CONVENIOS",
+    "CESE_OBSERVADOR",
+    "SINIESTROS",
+    "REUBICACION",
+    "SOLICITUD_REUBICACION",
+    "BAJA_ESTACION",
+    "ACTUALIZACION_METADATA",
+]
+
+DOCUMENTAL_DISPLAY = {
+    "INSTALACION": "INSTALACIÓN",
+    "CONVENIOS": "CONVENIO",
+    "CESE_OBSERVADOR": "CESE DE OBSERVADOR",
+    "SINIESTROS": "SINIESTRO",
+    "REUBICACION": "REUBICACIÓN",
+    "SOLICITUD_REUBICACION": "SOLICITUD DE REUBICACIÓN",
+    "BAJA_ESTACION": "BAJA DE ESTACIÓN",
+    "ACTUALIZACION_METADATA": "ACTUALIZACIÓN DE METADATA",
+}
+
+SINIESTRO_SUBTIPOS = [
+    "ROBO",
+    "DAÑO_POR_TERCEROS",
+    "DAÑO_POR_FENOMENO_NATURAL",
+    "ACCIDENTE",
+    "OTRO",
+]
+
+REPORTE_DOCUMENTAL_ANUAL_DIRNAME = "REPORTE_DOCUMENTAL_ANUAL"
+
 ESTADO_SITUACIONAL_LABEL = "ESTADO SITUACIONAL DE LA ESTACIÓN PREVIA AL MANTENIMIENTO"
-CORRECTIVO_INDIVIDUAL_DIRNAME = "CORRECTIVO_INDIVIDUAL"
+MANTENIMIENTO_INDIVIDUAL_DIRNAME = "MANTENIMIENTO_INDIVIDUAL"
 MANTENIMIENTO_GRUPAL_DIRNAME = "MANTENIMIENTO_GRUPAL_SIN_RUTA"
 
 RUTAS_TIPOS = ["MANTENIMIENTOS", "AFOROS", "INSPECCION"]
@@ -96,6 +136,16 @@ RUTA_SINGULAR = {"MANTENIMIENTOS": "MANTENIMIENTO", "AFOROS": "AFORO", "INSPECCI
 
 DZ_CONVENIOS_DIRNAME = "CONVENIOS"
 FICHA_MATRICULA_DIRNAME = "Ficha de Matricula"
+
+MATRICULA_DOC_TYPES = [
+    "ACTA_INSTALACION",
+    "FICHA_MATRICULA",
+    "INFORME_MATRICULA",
+    "INFORME_INSTALACION",
+    "CONVENIO",
+    "ANEXO",
+    "OTRO",
+]
 
 FICHA_COLUMNS = [
     "CODIGO", "NOMBRE_ESTACION", "DZ", "DEPARTAMENTO", "PROVINCIA", "DISTRITO",
@@ -287,7 +337,7 @@ def cat_dir_estacion(dz: str, year: int | str, station_meta_or_folder, categoria
 
 
 def mantenimiento_correctivo_dir_estacion(dz: str, year: int | str, station_meta_or_folder) -> Path:
-    return cat_dir_estacion(dz, year, station_meta_or_folder, "MANTENIMIENTO") / CORRECTIVO_INDIVIDUAL_DIRNAME
+    return cat_dir_estacion(dz, year, station_meta_or_folder, "MANTENIMIENTO") / MANTENIMIENTO_INDIVIDUAL_DIRNAME
 
 
 def mantenimiento_ruta_dir_estacion(dz: str, year: int | str, station_meta_or_folder, ruta: str) -> Path:
@@ -312,6 +362,14 @@ def dz_convenios_dir(dz: str) -> Path:
 
 def dz_ficha_matricula_dir(dz: str) -> Path:
     return dz_dir(dz) / FICHA_MATRICULA_DIRNAME
+
+
+def reporte_documental_anual_dir(dz: str, year: int | str) -> Path:
+    return year_dir(dz, year) / REPORTE_DOCUMENTAL_ANUAL_DIRNAME
+
+
+def reporte_documental_anual_path(dz: str, year: int | str) -> Path:
+    return reporte_documental_anual_dir(dz, year) / f"reporte_documental_anual_{dz.upper()}_{int(year):04d}.xlsx"
 
 # =========================
 # ÍNDICES / XLSX
@@ -520,6 +578,26 @@ def build_filename_foto(ruta: str, dz: str, station_meta: dict[str, str], fecha:
 def build_filename_ficha(dz: str) -> str:
     return f"Ficha_de_Matricula_{dz.upper()}.xlsx"
 
+
+def clean_output_filename(name: str, default_ext: str = "pdf") -> str:
+    """Limpia un nombre final ingresado desde la app, conservando la extensión."""
+    name = (name or "").strip()
+    if not name:
+        name = f"DOCUMENTO.{default_ext.lstrip('.')}"
+
+    stem = Path(name).stem
+    ext = Path(name).suffix.lower().lstrip('.') or default_ext.lstrip('.').lower()
+    stem = slug(stem) or "DOCUMENTO"
+    return f"{stem}.{ext}"
+
+
+def build_filename_matricula_documento(tipo_doc: str, dz: str, station_meta: dict[str, str], fecha: datetime, ext: str, orden: int | None = None) -> str:
+    tipo = (tipo_doc or "OTRO").upper().strip()
+    if tipo not in MATRICULA_DOC_TYPES:
+        tipo = "OTRO"
+    suffix = f"_{orden:02d}" if orden is not None else ""
+    return f"{tipo}_{dz.upper()}_{station_meta['folder_name']}_{fecha.date()}{suffix}.{ext.lstrip('.').lower()}"
+
 # =========================
 # README / INDEX
 # =========================
@@ -535,7 +613,7 @@ def write_estacion_readme(dz: str, year: int | str, station_meta: dict[str, str]
         f"- Nombre: {station_meta['nombre']}\n"
         f"- Carpeta estación: {station_meta['folder_name']}\n"
         "- Estructura: AAAA/ESTACION/CATEGORIA/archivo\n"
-        f"- MANTENIMIENTO usa: '{CORRECTIVO_INDIVIDUAL_DIRNAME}' para correctivos puntuales y 'RUTA_XX' para evidencias de ruta. Los informes grupales sin ruta se guardan en DZ/AÑO/{MANTENIMIENTO_GRUPAL_DIRNAME}.\n"
+        f"- MANTENIMIENTO usa: '{MANTENIMIENTO_INDIVIDUAL_DIRNAME}' para mantenimientos individuales, checklist y estado situacional por estación y 'RUTA_XX' para evidencias de ruta. Los informes grupales sin ruta se guardan en DZ/AÑO/{MANTENIMIENTO_GRUPAL_DIRNAME}.\n"
         "- Importante: al ingresar fechas use siempre DD-MM-YYYY.\n"
     )
     (d / "README.md").write_text(txt, encoding="utf-8")
@@ -550,7 +628,7 @@ def scan_files_estacion(dz: str, year: int | str, station_meta: dict[str, str]):
         cdir = base / cat
         if not cdir.exists():
             continue
-        if cat == "MANTENIMIENTO":
+        if cat in {"MANTENIMIENTO", "SINIESTROS"}:
             for f in sorted([p for p in cdir.rglob("*") if p.is_file()]):
                 rows.append((cat, f))
         else:
@@ -631,7 +709,7 @@ def add_reference_to_stations(dz: str, year: int | str, estaciones_meta: list[di
 # =========================
 # OPERACIONES
 # =========================
-def add_report_estacion(src: Path, categoria: str, dz: str, codigo: str, fecha_str_ddmmyyyy: str, maestra_xlsx: Path, copy=False):
+def add_report_estacion(src: Path, categoria: str, dz: str, codigo: str, fecha_str_ddmmyyyy: str, maestra_xlsx: Path, copy=False, subtipo_siniestro: str = ""):
     categoria = categoria.upper().strip()
     if categoria not in CATEGORIAS_ESTACION:
         raise ValueError(f"Categoria no válida: {categoria}. Use: {', '.join(CATEGORIAS_ESTACION)}")
@@ -643,8 +721,13 @@ def add_report_estacion(src: Path, categoria: str, dz: str, codigo: str, fecha_s
     year = fecha.year
     ext = src.suffix[1:] if src.suffix else "pdf"
 
-    if categoria == "MANTENIMIENTO":
+    if categoria in {"MANTENIMIENTO", "CHECKLIST_MANTENIMIENTO", "ESTADO_SITUACIONAL"}:
         dest_dir = mantenimiento_correctivo_dir_estacion(dz, year, station_meta)
+    elif categoria == "SINIESTROS":
+        subtipo = (subtipo_siniestro or "OTRO").upper().strip()
+        if subtipo not in SINIESTRO_SUBTIPOS:
+            subtipo = "OTRO"
+        dest_dir = cat_dir_estacion(dz, year, station_meta, categoria) / subtipo
     else:
         dest_dir = cat_dir_estacion(dz, year, station_meta, categoria)
     ensure_dirs(dest_dir)
@@ -658,6 +741,70 @@ def add_report_estacion(src: Path, categoria: str, dz: str, codigo: str, fecha_s
     write_estacion_readme(dz, year, station_meta)
     update_legajo_index_estacion(dz, year, station_meta)
     return dst
+
+
+def add_documentos_matricula(srcs: list[Path], tipos: list[str], nombres_finales: list[str] | None,
+                            dz: str, codigo: str, fecha_str_ddmmyyyy: str,
+                            maestra_xlsx: Path, copy=False) -> list[Path]:
+    """Guarda uno o varios documentos dentro de ESTACION/INSTALACION/.
+
+    Cada documento puede tener un tipo técnico y un nombre final editable desde la app.
+    """
+    if not srcs:
+        raise ValueError("Debes indicar al menos un documento de matrícula.")
+
+    if len(tipos) != len(srcs):
+        raise ValueError("La cantidad de tipos debe coincidir con la cantidad de archivos.")
+
+    if nombres_finales is not None and len(nombres_finales) != len(srcs):
+        raise ValueError("La cantidad de nombres finales debe coincidir con la cantidad de archivos.")
+
+    station_meta = get_station_meta(codigo, maestra_xlsx)
+    fecha = parse_fecha_ddmmyyyy(fecha_str_ddmmyyyy)
+    year = fecha.year
+    dest_dir = cat_dir_estacion(dz, year, station_meta, "INSTALACION")
+    ensure_dirs(dest_dir)
+
+    used_names = set()
+    destinos = []
+
+    for i, src in enumerate(srcs, start=1):
+        src = Path(src).expanduser()
+        if not src.exists():
+            raise FileNotFoundError(f"No existe el archivo fuente: {src}")
+
+        tipo_doc = (tipos[i - 1] or "OTRO").upper().strip()
+        if tipo_doc not in MATRICULA_DOC_TYPES:
+            tipo_doc = "OTRO"
+
+        ext = src.suffix[1:] if src.suffix else "pdf"
+
+        if nombres_finales and nombres_finales[i - 1].strip():
+            fname = clean_output_filename(nombres_finales[i - 1], ext)
+        else:
+            fname = build_filename_matricula_documento(tipo_doc, dz, station_meta, fecha, ext)
+
+        # Evita sobrescrituras cuando dos filas terminan con el mismo nombre.
+        original_stem = Path(fname).stem
+        original_ext = Path(fname).suffix
+        counter = 2
+        while fname in used_names or (dest_dir / fname).exists():
+            fname = f"{original_stem}_{counter:02d}{original_ext}"
+            counter += 1
+
+        used_names.add(fname)
+        dst = dest_dir / fname
+
+        if copy:
+            shutil.copy2(src, dst)
+        else:
+            shutil.move(str(src), str(dst))
+
+        destinos.append(dst)
+
+    write_estacion_readme(dz, year, station_meta)
+    update_legajo_index_estacion(dz, year, station_meta)
+    return destinos
 
 
 def add_report_ruta(src: Path, dz: str, ruta: str, tipo: str, fecha_str_ddmmyyyy: str,
@@ -884,6 +1031,155 @@ def create_ficha_excel(dz: str, filename: str | None = None, overwrite: bool = F
     wb.save(outpath)
     return outpath
 
+
+# =========================
+# REPORTE DOCUMENTAL ANUAL
+# =========================
+def _station_meta_from_folder(folder_name: str, catalog_by_folder: dict[str, dict[str, str]]) -> dict[str, str]:
+    if folder_name in catalog_by_folder:
+        return catalog_by_folder[folder_name]
+
+    parts = folder_name.split("-", 2)
+    codigo = parts[0] if len(parts) > 0 else ""
+    clasificacion = parts[1] if len(parts) > 1 else ""
+    nombre = parts[2].replace("_", " ") if len(parts) > 2 else folder_name
+    return {
+        "codigo": codigo,
+        "nombre": nombre,
+        "clasificacion": clasificacion,
+        "folder_name": folder_name,
+    }
+
+
+def _is_station_folder(path: Path) -> bool:
+    if not path.is_dir():
+        return False
+    excluded = {
+        "RUTAS",
+        MANTENIMIENTO_GRUPAL_DIRNAME,
+        REPORTE_DOCUMENTAL_ANUAL_DIRNAME,
+    }
+    if path.name in excluded:
+        return False
+    return True
+
+
+def _append_doc_rows(rows_by_category: dict[str, list[list]], resumen_keys: set, year: int, dz: str,
+                     meta: dict[str, str], categoria: str, archivo: str, ruta: str, subtipo: str = ""):
+    condicion = DOCUMENTAL_DISPLAY.get(categoria, categoria)
+    resumen_keys.add((year, dz.upper(), meta["codigo"], meta["clasificacion"], meta["nombre"], condicion, subtipo))
+    row = [year, dz.upper(), meta["codigo"], meta["clasificacion"], meta["nombre"], condicion, subtipo, archivo, ruta]
+    rows_by_category.setdefault(categoria, []).append(row)
+
+
+def generar_reporte_documental_anual(dz: str, year: int | str, maestra_xlsx: Path = STATIONS_XLSX_DEFAULT) -> Path:
+    """Genera un Excel anual con documentos formales/administrativos por estación.
+
+    No incluye rutas ni mantenimientos operativos.
+    """
+    from openpyxl import Workbook
+
+    year = int(year)
+    dz = dz.upper()
+    base_year = year_dir(dz, year)
+    if not base_year.exists():
+        raise FileNotFoundError(f"No existe la carpeta del año: {base_year}")
+
+    try:
+        catalog = load_station_catalog(maestra_xlsx)
+    except Exception:
+        catalog = {}
+    catalog_by_folder = {v.get("folder_name", ""): v for v in catalog.values()}
+
+    rows_by_category: dict[str, list[list]] = {cat: [] for cat in DOCUMENTAL_CATEGORIES}
+    resumen_keys: set = set()
+
+    for station_path in sorted([p for p in base_year.iterdir() if _is_station_folder(p)]):
+        meta = _station_meta_from_folder(station_path.name, catalog_by_folder)
+
+        # Carpetas documentales por estación.
+        for categoria in [c for c in DOCUMENTAL_CATEGORIES if c != "CONVENIOS"]:
+            cdir = station_path / categoria
+            if not cdir.exists():
+                continue
+
+            if categoria == "SINIESTROS":
+                for f in sorted([p for p in cdir.rglob("*") if p.is_file() and not p.name.startswith("legajo_index")]):
+                    try:
+                        rel_to_cat = f.relative_to(cdir)
+                        first = rel_to_cat.parts[0] if len(rel_to_cat.parts) > 1 else ""
+                    except Exception:
+                        first = ""
+                    subtipo = first if first in SINIESTRO_SUBTIPOS else "OTRO"
+                    ruta = os.path.relpath(f, start=base_year)
+                    _append_doc_rows(rows_by_category, resumen_keys, year, dz, meta, categoria, f.name, ruta, subtipo)
+            else:
+                for f in sorted([p for p in cdir.rglob("*") if p.is_file() and not p.name.startswith("legajo_index")]):
+                    ruta = os.path.relpath(f, start=base_year)
+                    _append_doc_rows(rows_by_category, resumen_keys, year, dz, meta, categoria, f.name, ruta, "")
+
+        # Convenios referenciados en el índice anual de la estación.
+        index_path = station_path / "legajo_index.xlsx"
+        for row in read_xlsx_as_dicts(index_path):
+            cat = str(row.get("categoria", "") or "").upper().strip()
+            if cat != "CONVENIOS":
+                continue
+            row_year = str(row.get("year", "") or "").strip()
+            if row_year and row_year != f"{year:04d}" and row_year != str(year):
+                continue
+            archivo = str(row.get("filename", "") or "").strip()
+            ruta = str(row.get("relpath", "") or "").strip()
+            _append_doc_rows(rows_by_category, resumen_keys, year, dz, meta, "CONVENIOS", archivo, ruta, "")
+
+    resumen_rows = [list(k) for k in sorted(resumen_keys, key=lambda x: (x[1], x[2], x[5], x[6]))]
+    detalle_rows = []
+    for cat in DOCUMENTAL_CATEGORIES:
+        detalle_rows.extend(rows_by_category.get(cat, []))
+    detalle_rows.sort(key=lambda x: (x[1], x[2], x[5], x[6], x[7]))
+
+    outdir = reporte_documental_anual_dir(dz, year)
+    ensure_dirs(outdir)
+    outpath = reporte_documental_anual_path(dz, year)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "RESUMEN"
+    ws.append(["Año", "DZ", "Código", "Clasificación", "Estación", "Condición documental", "Subtipo documental"])
+    for row in resumen_rows:
+        ws.append(row)
+    _apply_xlsx_style(ws)
+
+    ws = wb.create_sheet("DETALLE")
+    ws.append(["Año", "DZ", "Código", "Clasificación", "Estación", "Condición documental", "Subtipo documental", "Archivo", "Ruta"])
+    for row in detalle_rows:
+        ws.append(row)
+    _apply_xlsx_style(ws)
+
+    sheet_names = {
+        "INSTALACION": "INSTALACION",
+        "CONVENIOS": "CONVENIOS",
+        "CESE_OBSERVADOR": "CESE_OBSERVADOR",
+        "SINIESTROS": "SINIESTROS",
+        "REUBICACION": "REUBICACION",
+        "SOLICITUD_REUBICACION": "SOLICITUD_REUBICACION",
+        "BAJA_ESTACION": "BAJA_ESTACION",
+        "ACTUALIZACION_METADATA": "ACT_METADATA",
+    }
+    # Crea pestañas específicas solo cuando existe al menos un archivo de esa sección.
+    # RESUMEN siempre queda visible como hoja principal del reporte.
+    for cat in DOCUMENTAL_CATEGORIES:
+        cat_rows = rows_by_category.get(cat, [])
+        if not cat_rows:
+            continue
+        ws = wb.create_sheet(sheet_names.get(cat, cat)[:31])
+        ws.append(["Año", "DZ", "Código", "Clasificación", "Estación", "Condición documental", "Subtipo documental", "Archivo", "Ruta"])
+        for row in sorted(cat_rows, key=lambda x: (x[2], x[6], x[7])):
+            ws.append(row)
+        _apply_xlsx_style(ws)
+
+    wb.save(outpath)
+    return outpath
+
 # =========================
 # INIT
 # =========================
@@ -1074,9 +1370,13 @@ def main():
     p_add.add_argument("--fecha", help="DD-MM-YYYY")
     p_add.add_argument("--maestra", default=str(STATIONS_XLSX_DEFAULT), help="Excel maestro de estaciones")
     p_add.add_argument("--copy", action="store_const", const=True, default=None, help="Copiar en lugar de mover")
+    p_add.add_argument("--subtipo-siniestro", choices=SINIESTRO_SUBTIPOS, default="OTRO", help="Solo aplica cuando la categoría es SINIESTROS")
 
-    p_mat = sub.add_parser("addmatricula", help="Registrar un documento de MATRÍCULA por estación")
-    p_mat.add_argument("--src", required=True, help="Archivo fuente")
+    p_mat = sub.add_parser("addmatricula", help="Registrar documentos de INSTALACIÓN por estación")
+    p_mat.add_argument("--src", help="Archivo fuente único, mantenido por compatibilidad")
+    p_mat.add_argument("--srcs", nargs="+", help="Archivos fuente de matrícula")
+    p_mat.add_argument("--tipos", nargs="+", help="Tipos de documento: " + ", ".join(MATRICULA_DOC_TYPES))
+    p_mat.add_argument("--nombres-finales", nargs="+", default=None, help="Nombres finales para guardar cada documento")
     p_mat.add_argument("--dz", help="Ej: DZ06")
     p_mat.add_argument("--codigo", help="Código de la estación")
     p_mat.add_argument("--fecha", help="DD-MM-YYYY")
@@ -1146,6 +1446,11 @@ def main():
     p_fichax.add_argument("--filename", default="")
     p_fichax.add_argument("--overwrite", action="store_true")
 
+    p_repdoc = sub.add_parser("reporte_documental_anual", help="Generar reporte documental anual de una DZ/año")
+    p_repdoc.add_argument("--dz", required=True, help="Ej: DZ04")
+    p_repdoc.add_argument("--year", required=True, type=int, help="Ej: 2025")
+    p_repdoc.add_argument("--maestra", default=str(STATIONS_XLSX_DEFAULT), help="Excel maestro de estaciones")
+
     p_index = sub.add_parser("index", help="Reconstruir índice de una estación en un año")
     p_index.add_argument("--dz", required=True)
     p_index.add_argument("--year", required=True, type=int)
@@ -1167,20 +1472,35 @@ def main():
         if not src.exists():
             print(f"❌ No existe el archivo fuente: {src}", file=sys.stderr); sys.exit(1)
         categoria, dzv, codigo, fecha, copy = interactive_for_estacion(args)
-        dst = add_report_estacion(src, categoria, dzv, codigo, fecha, Path(args.maestra).expanduser(), copy)
+        dst = add_report_estacion(src, categoria, dzv, codigo, fecha, Path(args.maestra).expanduser(), copy, getattr(args, "subtipo_siniestro", "OTRO"))
         print(f"✅ Informe por estación agregado: {dst}")
 
     elif args.cmd == "addmatricula":
-        src = Path(args.src).expanduser()
-        if not src.exists():
-            print(f"❌ No existe el archivo fuente: {src}", file=sys.stderr); sys.exit(1)
+        src_values = args.srcs or ([args.src] if args.src else [])
+        if not src_values:
+            print("❌ Debes indicar --srcs archivo1 archivo2 ... o --src archivo", file=sys.stderr); sys.exit(1)
+
+        srcs = [Path(x).expanduser() for x in src_values]
+        for src in srcs:
+            if not src.exists():
+                print(f"❌ No existe el archivo fuente: {src}", file=sys.stderr); sys.exit(1)
+
+        tipos = args.tipos or ["OTRO"] * len(srcs)
+        if len(tipos) != len(srcs):
+            print("❌ La cantidad de --tipos debe coincidir con la cantidad de --srcs", file=sys.stderr); sys.exit(1)
+
+        if args.nombres_finales is not None and len(args.nombres_finales) != len(srcs):
+            print("❌ La cantidad de --nombres-finales debe coincidir con la cantidad de --srcs", file=sys.stderr); sys.exit(1)
+
         maestra = Path(args.maestra).expanduser()
         dzv = args.dz or prompt_dz()
         codigo = args.codigo or prompt_codigo_estacion(maestra)
         fecha = args.fecha or prompt_fecha_ddmmyyyy()
         copy = args.copy if args.copy is not None else prompt_copy()
-        dst = add_report_estacion(src, "MATRICULAS", dzv, codigo, fecha, maestra, copy)
-        print(f"✅ Documento de matrícula agregado: {dst}")
+        destinos = add_documentos_matricula(srcs, tipos, args.nombres_finales, dzv, codigo, fecha, maestra, copy)
+        print("✅ Documentos de matrícula agregados:")
+        for dst in destinos:
+            print(f"   - {dst}")
 
     elif args.cmd == "addmantenimiento_grupal":
         src = Path(args.src).expanduser()
@@ -1243,6 +1563,10 @@ def main():
             print("   Hoja: MATRÍCULA | Columnas:", ", ".join(FICHA_COLUMNS))
         except RuntimeError as e:
             print(f"❌ {e}", file=sys.stderr); sys.exit(1)
+
+    elif args.cmd == "reporte_documental_anual":
+        out = generar_reporte_documental_anual(args.dz, args.year, Path(args.maestra).expanduser())
+        print(f"✅ Reporte documental anual generado: {out}")
 
     elif args.cmd == "index":
         meta = get_station_meta(args.codigo, Path(args.maestra).expanduser())
