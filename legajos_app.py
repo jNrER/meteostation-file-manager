@@ -40,6 +40,8 @@ CATEGORIAS_ESTACION = [
     "ESTADO_SITUACIONAL",
     "INSPECCION",
     "CALIBRACION",
+    "CLASIFICACION_EMPLAZAMIENTO",
+    "COMPROBACION_SENSOR",
     "AFOROS",
     "CALIDAD_DATOS",
     "INCIDENCIAS",
@@ -59,6 +61,17 @@ SINIESTRO_SUBTIPOS = [
     "DAÑO_POR_TERCEROS",
     "DAÑO_POR_FENOMENO_NATURAL",
     "ACCIDENTE",
+    "OTRO",
+]
+
+SENSOR_VARIABLES = [
+    "TEMPERATURA",
+    "HUMEDAD",
+    "PRECIPITACION",
+    "RADIACION_SOLAR",
+    "RADIACION_UV",
+    "VIENTO",
+    "PRESION_ATMOSFERICA",
     "OTRO",
 ]
 
@@ -643,6 +656,17 @@ class LegajosGUIV2(BaseApp):
         self.siniestro_subtipo_combo = ttk.Combobox(row5, textvariable=self.siniestro_subtipo_var, values=SINIESTRO_SUBTIPOS, state="readonly", width=30)
         self.siniestro_subtipo_combo.grid(row=0, column=3, padx=5, pady=5, sticky="w")
 
+        ttk.Label(row5, text="Variable/sensor:").grid(row=0, column=4, padx=15, pady=5, sticky="w")
+        self.variable_sensor_var = tk.StringVar(value="TEMPERATURA")
+        self.variable_sensor_combo = ttk.Combobox(
+            row5,
+            textvariable=self.variable_sensor_var,
+            values=SENSOR_VARIABLES,
+            state="readonly",
+            width=24
+        )
+        self.variable_sensor_combo.grid(row=0, column=5, padx=5, pady=5, sticky="w")
+
         row6 = ttk.Frame(form)
         row6.pack(fill="x", padx=8, pady=6)
 
@@ -1150,6 +1174,7 @@ class LegajosGUIV2(BaseApp):
         self.set_enabled(self.index_year_entry, action in {"index", "reporte_documental_anual"})
         self.set_enabled(self.filename_entry, action == "addficha_dz")
         self.set_enabled(self.siniestro_subtipo_combo, action == "add" and self.categoria_var.get() == "SINIESTROS")
+        self.set_enabled(self.variable_sensor_combo, action == "add" and self.categoria_var.get() == "COMPROBACION_SENSOR")
         self.set_enabled(self.nombre_ioarr_entry, action == "addioarr")
         self.set_enabled(self.tipo_doc_ioarr_combo, False)
 
@@ -1511,6 +1536,7 @@ class LegajosGUIV2(BaseApp):
         self.copy_mode_var.set("move")
         self.overwrite_var.set(False)
         self.siniestro_subtipo_var.set("ROBO")
+        self.variable_sensor_var.set("TEMPERATURA")
         self.nombre_ioarr_var.set("")
         self.tipo_doc_ioarr_var.set("INFORME_TECNICO")
 
@@ -1596,6 +1622,9 @@ class LegajosGUIV2(BaseApp):
         if action == "reporte_documental_anual" and not self.index_year_var.get().strip():
             return False, "Ingresa el año para generar el reporte documental anual"
 
+        if action == "add" and self.categoria_var.get() == "COMPROBACION_SENSOR" and not self.variable_sensor_var.get().strip():
+            return False, "Selecciona la variable/sensor para la comprobación"
+
 
         if action == "addioarr" and not self.nombre_ioarr_var.get().strip():
             return False, "Ingresa el nombre corto de la IOARR, por ejemplo PUENTE_BRENA-TULUMAYO"
@@ -1634,6 +1663,8 @@ class LegajosGUIV2(BaseApp):
             ]
             if self.categoria_var.get() == "SINIESTROS":
                 command += ["--subtipo-siniestro", self.siniestro_subtipo_var.get()]
+            if self.categoria_var.get() == "COMPROBACION_SENSOR":
+                command += ["--variable-sensor", self.variable_sensor_var.get()]
             if self.copy_mode_var.get() == "copy":
                 command += ["--copy"]
 

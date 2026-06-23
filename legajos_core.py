@@ -82,6 +82,8 @@ CATEGORIAS_ESTACION = [
     "ESTADO_SITUACIONAL",
     "INSPECCION",
     "CALIBRACION",
+    "CLASIFICACION_EMPLAZAMIENTO",
+    "COMPROBACION_SENSOR",
     "AFOROS",
     "CALIDAD_DATOS",
     "INCIDENCIAS",
@@ -101,6 +103,8 @@ DOCUMENTAL_CATEGORIES = [
     "INSTALACION_ESTACION",
     "CONVENIOS",
     "IOARR",
+    "COMPROBACION_SENSOR",
+    "CLASIFICACION_EMPLAZAMIENTO",
     "CESE_OBSERVADOR",
     "SINIESTROS",
     "REUBICACION",
@@ -115,6 +119,8 @@ DOCUMENTAL_DISPLAY = {
     "INSTALACION_EQUIPO": "INSTALACIÓN DE EQUIPO",
     "CONVENIOS": "CONVENIO",
     "IOARR": "IOARR",
+    "COMPROBACION_SENSOR": "COMPROBACIÓN DE SENSOR",
+    "CLASIFICACION_EMPLAZAMIENTO": "CLASIFICACIÓN DE EMPLAZAMIENTO",
     "CESE_OBSERVADOR": "CESE DE OBSERVADOR",
     "SINIESTROS": "SINIESTRO",
     "REUBICACION": "REUBICACIÓN",
@@ -129,6 +135,17 @@ SINIESTRO_SUBTIPOS = [
     "DAÑO_POR_TERCEROS",
     "DAÑO_POR_FENOMENO_NATURAL",
     "ACCIDENTE",
+    "OTRO",
+]
+
+SENSOR_VARIABLES = [
+    "TEMPERATURA",
+    "HUMEDAD",
+    "PRECIPITACION",
+    "RADIACION_SOLAR",
+    "RADIACION_UV",
+    "VIENTO",
+    "PRESION_ATMOSFERICA",
     "OTRO",
 ]
 
@@ -608,6 +625,11 @@ def build_filename_estacion(categoria: str, dz: str, station_meta: dict[str, str
     return f"{categoria}_{dz.upper()}_{station_meta['folder_name']}_{fecha.date()}.{ext.lstrip('.').lower()}"
 
 
+def build_filename_comprobacion_sensor(variable_sensor: str, dz: str, station_meta: dict[str, str], fecha: datetime, ext: str) -> str:
+    variable = slug(str(variable_sensor).upper().strip()) or "OTRO"
+    return f"COMPROBACION_SENSOR_{variable}_{dz.upper()}_{station_meta['folder_name']}_{fecha.date()}.{ext.lstrip('.').lower()}"
+
+
 def build_filename_ruta(ruta: str, tipo: str, fecha: datetime, ext: str) -> str:
     tipo_singular = RUTA_SINGULAR.get(tipo, tipo)
     return f"{ruta}_{tipo_singular}_{fecha.date()}.{ext.lstrip('.').lower()}"
@@ -771,7 +793,7 @@ def add_reference_to_stations(dz: str, year: int | str, estaciones_meta: list[di
 # =========================
 # OPERACIONES
 # =========================
-def add_report_estacion(src: Path, categoria: str, dz: str, codigo: str, fecha_str_ddmmyyyy: str, maestra_xlsx: Path, copy=False, subtipo_siniestro: str = ""):
+def add_report_estacion(src: Path, categoria: str, dz: str, codigo: str, fecha_str_ddmmyyyy: str, maestra_xlsx: Path, copy=False, subtipo_siniestro: str = "", variable_sensor: str = ""):
     categoria = categoria.upper().strip()
     if categoria not in CATEGORIAS_ESTACION:
         raise ValueError(f"Categoria no válida: {categoria}. Use: {', '.join(CATEGORIAS_ESTACION)}")
@@ -785,15 +807,33 @@ def add_report_estacion(src: Path, categoria: str, dz: str, codigo: str, fecha_s
 
     if categoria in {"MANTENIMIENTO", "CHECKLIST_MANTENIMIENTO", "ESTADO_SITUACIONAL"}:
         dest_dir = mantenimiento_correctivo_dir_estacion(dz, year, station_meta)
+        fname = build_filename_estacion(categoria, dz, station_meta, fecha, ext)
     elif categoria == "SINIESTROS":
         subtipo = (subtipo_siniestro or "OTRO").upper().strip()
         if subtipo not in SINIESTRO_SUBTIPOS:
             subtipo = "OTRO"
         dest_dir = cat_dir_estacion(dz, year, station_meta, categoria) / subtipo
+        fname = build_filename_estacion(categoria, dz, station_meta, fecha, ext)
+    elif categoria == "COMPROBACION_SENSOR":
+        variable = (variable_sensor or "OTRO").upper().strip()
+        if variable not in SENSOR_VARIABLES:
+            variable = "OTRO"
+        dest_dir = cat_dir_estacion(dz, year, station_meta, categoria) / variable
+        fname = build_filename_comprobacion_sensor(variable, dz, station_meta, fecha, ext)
     else:
         dest_dir = cat_dir_estacion(dz, year, station_meta, categoria)
+        fname = build_filename_estacion(categoria, dz, station_meta, fecha, ext)
+
     ensure_dirs(dest_dir)
-    dst = dest_dir / build_filename_estacion(categoria, dz, station_meta, fecha, ext)
+    dst = dest_dir / fname
+
+    # Evita sobrescribir si ya existe un archivo con el mismo nombre.
+    original_stem = dst.stem
+    original_suffix = dst.suffix
+    counter = 2
+    while dst.exists():
+        dst = dest_dir / f"{original_stem}_{counter:02d}{original_suffix}"
+        counter += 1
 
     if copy:
         shutil.copy2(src, dst)
@@ -1323,6 +1363,8 @@ def generar_reporte_documental_anual(dz: str, year: int | str, maestra_xlsx: Pat
         "INSTALACION_ESTACION": "INST_ESTACION",
         "CONVENIOS": "CONVENIOS",
         "IOARR": "IOARR",
+        "COMPROBACION_SENSOR": "COMPROB_SENSOR",
+        "CLASIFICACION_EMPLAZAMIENTO": "CLASIF_EMPLAZAMIENTO",
         "CESE_OBSERVADOR": "CESE_OBSERVADOR",
         "SINIESTROS": "SINIESTROS",
         "REUBICACION": "REUBICACION",
@@ -1540,6 +1582,7 @@ def main():
     p_add.add_argument("--maestra", default=str(STATIONS_XLSX_DEFAULT), help="Excel maestro de estaciones")
     p_add.add_argument("--copy", action="store_const", const=True, default=None, help="Copiar en lugar de mover")
     p_add.add_argument("--subtipo-siniestro", choices=SINIESTRO_SUBTIPOS, default="OTRO", help="Solo aplica cuando la categoría es SINIESTROS")
+    p_add.add_argument("--variable-sensor", choices=SENSOR_VARIABLES, default="OTRO", help="Solo aplica cuando la categoría es COMPROBACION_SENSOR")
 
     p_mat = sub.add_parser("addmatricula", help="Registrar documentos de INSTALACIÓN por estación")
     p_mat.add_argument("--src", help="Archivo fuente único, mantenido por compatibilidad")
@@ -1655,7 +1698,7 @@ def main():
         if not src.exists():
             print(f"❌ No existe el archivo fuente: {src}", file=sys.stderr); sys.exit(1)
         categoria, dzv, codigo, fecha, copy = interactive_for_estacion(args)
-        dst = add_report_estacion(src, categoria, dzv, codigo, fecha, Path(args.maestra).expanduser(), copy, getattr(args, "subtipo_siniestro", "OTRO"))
+        dst = add_report_estacion(src, categoria, dzv, codigo, fecha, Path(args.maestra).expanduser(), copy, getattr(args, "subtipo_siniestro", "OTRO"), getattr(args, "variable_sensor", "OTRO"))
         print(f"✅ Informe por estación agregado: {dst}")
 
     elif args.cmd == "addmatricula":
