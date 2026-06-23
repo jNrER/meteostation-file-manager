@@ -44,6 +44,7 @@ CATEGORIAS_ESTACION = [
     "CALIDAD_DATOS",
     "INCIDENCIAS",
     "INSTALACIONES_NUEVAS",
+    "INSTALACION_EQUIPO",
     "CESE_OBSERVADOR",
     "SINIESTROS",
     "REUBICACION",
@@ -580,7 +581,7 @@ class LegajosGUIV2(BaseApp):
         )
         self.selected_single_station_label.pack(anchor="w", padx=8, pady=(0, 8))
 
-        self.matricula_frame = ttk.LabelFrame(self.main, text="Documentos de instalación")
+        self.matricula_frame = ttk.LabelFrame(self.main, text="Documentos de instalación de estación")
         self.matricula_frame.pack(fill="x", pady=8)
 
         matricula_top = ttk.Frame(self.matricula_frame)

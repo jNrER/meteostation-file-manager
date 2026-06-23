@@ -11,7 +11,7 @@ LEGAJOS_codigo.py — Gestor de legajos para SGR/DRD SENAMHI
     - MANTENIMIENTO_INDIVIDUAL (informes, checklist y estado situacional de una estación)
     - RUTA_XX (archivos de checklist, estado situacional y fotos juntos)
     - MANTENIMIENTO_GRUPAL_SIN_RUTA a nivel DZ/año para informes que incluyen varias estaciones sin ruta
-- Incluye INSTALACION como sección por estación para actas, fichas e informes de matrícula
+- Incluye INSTALACION_ESTACION como sección por estación para actas, fichas e informes de matrícula
 - Comandos: init, add, addmatricula, addmantenimiento_grupal, addruta, addconvenio_dz, addchecklist,
             addestado_situacional, addfoto, addficha_dz, reporte_documental_anual, index, mk_ficha_dz.
 """
@@ -86,7 +86,8 @@ CATEGORIAS_ESTACION = [
     "CALIDAD_DATOS",
     "INCIDENCIAS",
     "INSTALACIONES_NUEVAS",
-    "INSTALACION",
+    "INSTALACION_ESTACION",
+    "INSTALACION_EQUIPO",
     "CESE_OBSERVADOR",
     "SINIESTROS",
     "REUBICACION",
@@ -96,7 +97,7 @@ CATEGORIAS_ESTACION = [
 ]
 
 DOCUMENTAL_CATEGORIES = [
-    "INSTALACION",
+    "INSTALACION_ESTACION",
     "CONVENIOS",
     "CESE_OBSERVADOR",
     "SINIESTROS",
@@ -107,7 +108,8 @@ DOCUMENTAL_CATEGORIES = [
 ]
 
 DOCUMENTAL_DISPLAY = {
-    "INSTALACION": "INSTALACIÓN",
+    "INSTALACION_ESTACION": "INSTALACIÓN DE ESTACIÓN",
+    "INSTALACION_EQUIPO": "INSTALACIÓN DE EQUIPO",
     "CONVENIOS": "CONVENIO",
     "CESE_OBSERVADOR": "CESE DE OBSERVADOR",
     "SINIESTROS": "SINIESTRO",
@@ -746,7 +748,7 @@ def add_report_estacion(src: Path, categoria: str, dz: str, codigo: str, fecha_s
 def add_documentos_matricula(srcs: list[Path], tipos: list[str], nombres_finales: list[str] | None,
                             dz: str, codigo: str, fecha_str_ddmmyyyy: str,
                             maestra_xlsx: Path, copy=False) -> list[Path]:
-    """Guarda uno o varios documentos dentro de ESTACION/INSTALACION/.
+    """Guarda uno o varios documentos dentro de ESTACION/INSTALACION_ESTACION/.
 
     Cada documento puede tener un tipo técnico y un nombre final editable desde la app.
     """
@@ -762,7 +764,7 @@ def add_documentos_matricula(srcs: list[Path], tipos: list[str], nombres_finales
     station_meta = get_station_meta(codigo, maestra_xlsx)
     fecha = parse_fecha_ddmmyyyy(fecha_str_ddmmyyyy)
     year = fecha.year
-    dest_dir = cat_dir_estacion(dz, year, station_meta, "INSTALACION")
+    dest_dir = cat_dir_estacion(dz, year, station_meta, "INSTALACION_ESTACION")
     ensure_dirs(dest_dir)
 
     used_names = set()
@@ -1156,7 +1158,7 @@ def generar_reporte_documental_anual(dz: str, year: int | str, maestra_xlsx: Pat
     _apply_xlsx_style(ws)
 
     sheet_names = {
-        "INSTALACION": "INSTALACION",
+        "INSTALACION_ESTACION": "INST_ESTACION",
         "CONVENIOS": "CONVENIOS",
         "CESE_OBSERVADOR": "CESE_OBSERVADOR",
         "SINIESTROS": "SINIESTROS",
