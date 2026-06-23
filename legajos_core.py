@@ -1592,7 +1592,6 @@ def main():
     p_ioarr.add_argument("--nombre-ioarr", required=True, help="Nombre corto para la carpeta, ej: PUENTE_BRENA-TULUMAYO")
     p_ioarr.add_argument("--tipo-documento", choices=IOARR_DOC_TYPES, default="OTRO", help="Tipo de documento IOARR para archivo único")
     p_ioarr.add_argument("--tipos-documento", nargs="+", choices=IOARR_DOC_TYPES, help="Tipos de documento IOARR para varios archivos")
-    p_ioarr.add_argument("--tipos-documento", nargs="+", choices=IOARR_DOC_TYPES, help="Tipos de documento IOARR para varios archivos")
     p_ioarr.add_argument("--estaciones", default="", help="Códigos de estaciones incluidos separados por coma")
     p_ioarr.add_argument("--maestra", default=str(STATIONS_XLSX_DEFAULT), help="Excel maestro de estaciones")
     p_ioarr.add_argument("--obs", default="")

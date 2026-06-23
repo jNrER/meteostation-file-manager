@@ -647,11 +647,11 @@ class LegajosGUIV2(BaseApp):
         row6.pack(fill="x", padx=8, pady=6)
 
         ttk.Label(row6, text="Nombre IOARR:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
-        self.nombre_ioarr_var = tk.StringVar(value="PUENTE_BRENA-TULUMAYO")
+        self.nombre_ioarr_var = tk.StringVar(value="")
         self.nombre_ioarr_entry = ttk.Entry(row6, textvariable=self.nombre_ioarr_var, width=38)
         self.nombre_ioarr_entry.grid(row=0, column=1, padx=5, pady=5, sticky="w")
 
-        ttk.Label(row6, text="Tipo doc IOARR:").grid(row=0, column=2, padx=15, pady=5, sticky="w")
+        self.tipo_doc_ioarr_label = ttk.Label(row6, text="Tipo doc IOARR:")
         self.tipo_doc_ioarr_var = tk.StringVar(value="INFORME_TECNICO")
         self.tipo_doc_ioarr_combo = ttk.Combobox(
             row6,
@@ -660,12 +660,13 @@ class LegajosGUIV2(BaseApp):
             state="readonly",
             width=24
         )
-        self.tipo_doc_ioarr_combo.grid(row=0, column=3, padx=5, pady=5, sticky="w")
+        # Este selector general queda oculto; el tipo documental ahora se elige por cada documento IOARR.
+        # self.tipo_doc_ioarr_combo.grid(row=0, column=3, padx=5, pady=5, sticky="w")
 
-        single_station_frame = ttk.LabelFrame(self.main, text="Buscar estación para acciones individuales")
-        single_station_frame.pack(fill="x", pady=8)
+        self.single_station_frame = ttk.LabelFrame(self.main, text="Buscar estación para acciones individuales")
+        self.single_station_frame.pack(fill="x", pady=8)
 
-        single_top = ttk.Frame(single_station_frame)
+        single_top = ttk.Frame(self.single_station_frame)
         single_top.pack(fill="x", padx=8, pady=6)
 
         ttk.Label(single_top, text="Buscar estación:").pack(side="left", padx=(0, 5))
@@ -678,7 +679,7 @@ class LegajosGUIV2(BaseApp):
         ttk.Button(single_top, text="Limpiar código", command=self.clear_single_station_code).pack(side="left", padx=5)
         ttk.Button(single_top, text="Desbloquear código", command=self.unlock_codigo_entry).pack(side="left", padx=5)
 
-        single_list_frame = ttk.Frame(single_station_frame)
+        single_list_frame = ttk.Frame(self.single_station_frame)
         single_list_frame.pack(fill="both", expand=True, padx=8, pady=6)
 
         self.single_station_listbox = tk.Listbox(single_list_frame, height=6)
@@ -690,7 +691,7 @@ class LegajosGUIV2(BaseApp):
         self.single_station_listbox.configure(yscrollcommand=single_scroll.set)
 
         self.selected_single_station_label = ttk.Label(
-            single_station_frame,
+            self.single_station_frame,
             text="Estación seleccionada: Ninguna",
             font=("Arial", 10, "bold")
         )
@@ -1173,7 +1174,9 @@ class LegajosGUIV2(BaseApp):
         ioarr_enabled = action == "addioarr"
         if hasattr(self, "ioarr_frame"):
             if ioarr_enabled:
-                self.ioarr_frame.pack(fill="x", pady=8, after=self.matricula_frame)
+                # Se coloca en una posición fija: debajo del buscador de estación individual.
+                # No se usa matrícula como referencia porque esa sección se oculta en IOARR.
+                self.ioarr_frame.pack(fill="x", pady=8, after=self.single_station_frame)
             else:
                 self.ioarr_frame.pack_forget()
         for row in getattr(self, "ioarr_rows", []):
@@ -1373,10 +1376,44 @@ class LegajosGUIV2(BaseApp):
             else:
                 self.selected_station_codes.discard(codigo)
 
+        if self.current_action == "addioarr":
+            self.update_nombre_ioarr_from_selected_stations()
+
     def select_all_stations(self):
         for codigo, _ in self.station_items_filtered:
             self.selected_station_codes.add(codigo)
         self.filter_station_list()
+
+    def update_nombre_ioarr_from_selected_stations(self):
+        """
+        Llena automáticamente el campo Nombre IOARR usando los nombres de las
+        estaciones seleccionadas en la lista múltiple.
+
+        Ejemplo:
+        PUENTE_BRENA-TULUMAYO
+        """
+        if not hasattr(self, "nombre_ioarr_var"):
+            return
+
+        codigos = self.get_selected_station_codes()
+        if not codigos:
+            return
+
+        nombres = []
+        for code in codigos:
+            texto = self.get_station_text_by_code(code)
+            parts = [p.strip() for p in texto.split("|")]
+            if len(parts) >= 3:
+                nombre = parts[2]
+            else:
+                nombre = texto
+
+            nombre_slug = slug_text(nombre)
+            if nombre_slug and nombre_slug not in nombres:
+                nombres.append(nombre_slug)
+
+        if nombres:
+            self.nombre_ioarr_var.set("-".join(nombres))
 
     def clear_station_selection(self):
         for codigo, _ in self.station_items_filtered:
@@ -1474,7 +1511,7 @@ class LegajosGUIV2(BaseApp):
         self.copy_mode_var.set("move")
         self.overwrite_var.set(False)
         self.siniestro_subtipo_var.set("ROBO")
-        self.nombre_ioarr_var.set("PUENTE_BRENA-TULUMAYO")
+        self.nombre_ioarr_var.set("")
         self.tipo_doc_ioarr_var.set("INFORME_TECNICO")
 
         self.station_listbox.delete(0, "end")
