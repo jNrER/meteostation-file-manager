@@ -38,10 +38,12 @@ CATEGORIAS_ESTACION = [
     "MANTENIMIENTO",
     "CHECKLIST_MANTENIMIENTO",
     "ESTADO_SITUACIONAL",
+    "FOTO_MANTENIMIENTO",
     "INSPECCION",
     "CALIBRACION",
     "CLASIFICACION_EMPLAZAMIENTO",
     "CERTIFICADO_COMPROBACION_SENSOR",
+    "INVENTARIO",
     "AFOROS",
     "CALIDAD_DATOS",
     "INCIDENCIAS",
@@ -854,7 +856,7 @@ class LegajosGUIV2(BaseApp):
             self.add_ioarr_row()
         self.add_convenio_row()
 
-        self.photos_frame = ttk.LabelFrame(self.main, text="Fotos para unir en orden (solo para Agregar foto)")
+        self.photos_frame = ttk.LabelFrame(self.main, text="Fotos para unir en orden (para foto de ruta o foto de mantenimiento individual)")
         self.photos_frame.pack(fill="x", pady=8)
 
         photos_top = ttk.Frame(self.photos_frame)
@@ -1301,6 +1303,8 @@ class LegajosGUIV2(BaseApp):
         action = self.current_action
 
         src_enabled = action in {"add", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addruta", "addaforo_sin_ruta"}
+        if action == "add" and self.categoria_var.get() == "FOTO_MANTENIMIENTO":
+            src_enabled = False
         self.set_enabled(self.src_field.entry, src_enabled)
         self.set_enabled(self.src_field.button, src_enabled)
 
@@ -1357,7 +1361,14 @@ class LegajosGUIV2(BaseApp):
         for row in getattr(self, "ioarr_rows", []):
             row.set_enabled(ioarr_enabled)
 
-        photos_enabled = action == "addfoto"
+        photos_enabled = action == "addfoto" or (action == "add" and self.categoria_var.get() == "FOTO_MANTENIMIENTO")
+
+        if hasattr(self, "photos_frame"):
+            if photos_enabled:
+                self.photos_frame.pack(fill="x", pady=8)
+            else:
+                self.photos_frame.pack_forget()
+
         for row in self.photo_rows:
             self.set_enabled(row.entry, photos_enabled)
             self.set_enabled(row.btn_select, photos_enabled)
@@ -1713,9 +1724,14 @@ class LegajosGUIV2(BaseApp):
 
         # Limpiar fotos si existen
         if hasattr(self, "photo_rows"):
-            self.photo_rows.clear()
-            if hasattr(self, "rebuild_photo_rows"):
-                self.rebuild_photo_rows()
+            for row in self.photo_rows:
+                try:
+                    row.var.set("")
+                    row.update_preview()
+                except Exception:
+                    pass
+            if hasattr(self, "update_pdf_preview_label"):
+                self.update_pdf_preview_label()
 
         # Limpiar documentos IOARR si existen
         if hasattr(self, "ioarr_rows"):
@@ -1806,11 +1822,14 @@ class LegajosGUIV2(BaseApp):
                 return False, f"No se encontró el Excel maestro en:\n{MAESTRA_DEFAULT}"
 
         if action in {"add", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addruta", "addaforo_sin_ruta"}:
-            src = os.path.realpath(self.src_field.entry.get().strip())
-            if not src:
-                return False, "Selecciona el archivo fuente"
-            if not os.path.isfile(src):
-                return False, f"No existe el archivo fuente:\n{src}"
+            if action == "add" and self.categoria_var.get() == "FOTO_MANTENIMIENTO":
+                pass
+            else:
+                src = os.path.realpath(self.src_field.entry.get().strip())
+                if not src:
+                    return False, "Selecciona el archivo fuente"
+                if not os.path.isfile(src):
+                    return False, f"No existe el archivo fuente:\n{src}"
 
         if action == "addmatricula":
             docs = self.get_matricula_docs()
@@ -1885,7 +1904,7 @@ class LegajosGUIV2(BaseApp):
         action = self.current_action
         src = os.path.realpath(self.src_field.entry.get().strip())
 
-        if action == "addfoto":
+        if action == "addfoto" or (action == "add" and self.categoria_var.get() == "FOTO_MANTENIMIENTO"):
             src = self.build_photos_pdf()
 
         command = ["python", SCRIPT_DEFAULT, action]

@@ -80,10 +80,12 @@ CATEGORIAS_ESTACION = [
     "MANTENIMIENTO",
     "CHECKLIST_MANTENIMIENTO",
     "ESTADO_SITUACIONAL",
+    "FOTO_MANTENIMIENTO",
     "INSPECCION",
     "CALIBRACION",
     "CLASIFICACION_EMPLAZAMIENTO",
     "CERTIFICADO_COMPROBACION_SENSOR",
+    "INVENTARIO",
     "AFOROS",
     "CALIDAD_DATOS",
     "INCIDENCIAS",
@@ -105,6 +107,7 @@ DOCUMENTAL_CATEGORIES = [
     "IOARR",
     "CERTIFICADO_COMPROBACION_SENSOR",
     "CLASIFICACION_EMPLAZAMIENTO",
+    "INVENTARIO",
     "CESE_OBSERVADOR",
     "SINIESTROS",
     "REUBICACION",
@@ -121,6 +124,7 @@ DOCUMENTAL_DISPLAY = {
     "IOARR": "IOARR",
     "CERTIFICADO_COMPROBACION_SENSOR": "CERTIFICADO DE COMPROBACIÓN DE SENSOR",
     "CLASIFICACION_EMPLAZAMIENTO": "CLASIFICACIÓN DE EMPLAZAMIENTO",
+    "INVENTARIO": "INVENTARIO",
     "CESE_OBSERVADOR": "CESE DE OBSERVADOR",
     "SINIESTROS": "SINIESTRO",
     "REUBICACION": "REUBICACIÓN",
@@ -723,6 +727,9 @@ def build_filename_estado_situacional(ruta: str, dz: str, station_meta: dict[str
 def build_filename_foto(ruta: str, dz: str, station_meta: dict[str, str], fecha: datetime, ext: str) -> str:
     return f"FOTO_MANTENIMIENTO_{ruta.upper()}_{dz.upper()}_{station_meta['folder_name']}_{fecha.date()}.{ext.lstrip('.').lower()}"
 
+def build_filename_foto_mantenimiento_individual(dz: str, station_meta: dict[str, str], fecha: datetime, ext: str) -> str:
+    return f"FOTO_MANTENIMIENTO_{dz.upper()}_{station_meta['folder_name']}_{fecha.date()}.{ext.lstrip('.').lower()}"
+
 
 def build_filename_ficha(dz: str) -> str:
     return f"Ficha_de_Matricula_{dz.upper()}.xlsx"
@@ -873,6 +880,9 @@ def add_report_estacion(src: Path, categoria: str, dz: str, codigo: str, fecha_s
     if categoria in {"MANTENIMIENTO", "CHECKLIST_MANTENIMIENTO", "ESTADO_SITUACIONAL"}:
         dest_dir = mantenimiento_correctivo_dir_estacion(dz, year, station_meta)
         fname = build_filename_estacion(categoria, dz, station_meta, fecha, ext)
+    elif categoria == "FOTO_MANTENIMIENTO":
+        dest_dir = mantenimiento_correctivo_dir_estacion(dz, year, station_meta)
+        fname = build_filename_foto_mantenimiento_individual(dz, station_meta, fecha, ext)
     elif categoria == "SINIESTROS":
         subtipo = (subtipo_siniestro or "OTRO").upper().strip()
         if subtipo not in SINIESTRO_SUBTIPOS:
@@ -1539,6 +1549,7 @@ def generar_reporte_documental_anual(dz: str, year: int | str, maestra_xlsx: Pat
         "IOARR": "IOARR",
         "CERTIFICADO_COMPROBACION_SENSOR": "COMPROB_SENSOR",
         "CLASIFICACION_EMPLAZAMIENTO": "CLASIF_EMPLAZAMIENTO",
+        "INVENTARIO": "INVENTARIO",
         "CESE_OBSERVADOR": "CESE_OBSERVADOR",
         "SINIESTROS": "SINIESTROS",
         "REUBICACION": "REUBICACION",
