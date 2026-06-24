@@ -347,6 +347,56 @@ class MatriculaDocRow(ttk.Frame):
 
 
 
+class ConvenioDzDocRow:
+    def __init__(self, parent, app, index, path="", tipo="CONVENIO"):
+        self.parent = parent
+        self.app = app
+        self.index = index
+        self.path_var = tk.StringVar(value=path)
+        self.tipo_var = tk.StringVar(value=tipo)
+
+        self.frame = ttk.Frame(parent)
+        self.frame.pack(fill="x", padx=6, pady=3)
+
+        ttk.Label(self.frame, text=f"Doc {index}:").grid(row=0, column=0, padx=4, pady=3, sticky="w")
+
+        self.path_entry = ttk.Entry(self.frame, textvariable=self.path_var, width=70)
+        self.path_entry.grid(row=0, column=1, padx=4, pady=3, sticky="we")
+
+        ttk.Button(self.frame, text="Seleccionar", command=self.browse).grid(row=0, column=2, padx=4, pady=3)
+
+        ttk.Label(self.frame, text="Tipo:").grid(row=0, column=3, padx=(14, 4), pady=3, sticky="w")
+        self.tipo_combo = ttk.Combobox(
+            self.frame,
+            textvariable=self.tipo_var,
+            values=CONVENIO_DZ_DOC_TYPES,
+            state="readonly",
+            width=28
+        )
+        self.tipo_combo.grid(row=0, column=4, padx=4, pady=3, sticky="w")
+
+        ttk.Button(self.frame, text="Quitar", command=self.remove).grid(row=0, column=5, padx=4, pady=3)
+
+        self.frame.columnconfigure(1, weight=1)
+
+    def browse(self):
+        path = filedialog.askopenfilename(
+            title="Seleccionar documento de convenio DZ",
+            filetypes=[
+                ("Documentos", "*.pdf *.docx *.xlsx *.xls *.jpg *.jpeg *.png"),
+                ("Todos los archivos", "*.*")
+            ]
+        )
+        if path:
+            self.path_var.set(path)
+
+    def remove(self):
+        self.app.remove_convenio_row(self)
+
+    def get_data(self):
+        return self.path_var.get().strip(), self.tipo_var.get().strip()
+
+
 class IoarrDocRow(ttk.Frame):
     def __init__(self, master, idx, remove_callback):
         super().__init__(master)
@@ -445,24 +495,12 @@ class LegajosGUIV2(BaseApp):
 
         self.photo_rows = []
         self.matricula_rows = []
-        # Datos específicos para convenios DZ
-        self.convenio_frame = ttk.LabelFrame(main, text="Datos del convenio DZ")
-        row_convenio = ttk.Frame(self.convenio_frame)
-        row_convenio.pack(fill="x", padx=8, pady=6)
-
-        ttk.Label(row_convenio, text="Tipo documento:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
         self.tipo_documento_convenio_var = tk.StringVar(value="CONVENIO")
-        self.tipo_documento_convenio_combo = ttk.Combobox(
-            row_convenio,
-            textvariable=self.tipo_documento_convenio_var,
-            values=CONVENIO_DZ_DOC_TYPES,
-            state="readonly",
-            width=32
-        )
-        self.tipo_documento_convenio_combo.grid(row=0, column=1, padx=5, pady=5, sticky="w")
+        self.entidad_convenio_var = tk.StringVar(value="")
 
 
         self.ioarr_rows = []
+        self.convenio_rows = []
         self.temp_generated_file = None
         self.action_buttons = []
 
@@ -529,7 +567,7 @@ class LegajosGUIV2(BaseApp):
             ("Agregar estado situacional de ruta", "addestado_situacional"),
             ("Agregar foto de ruta", "addfoto"),
             ("Agregar ruta", "addruta"),
-            ("Agregar convenio DZ", "addconvenio_dz"),
+            ("Agregar convenio DZ"),
             ("Agregar documento IOARR", "addioarr"),
             ("Generar reporte documental anual", "reporte_documental_anual"),
             ("Crear estructura", "init"),
@@ -769,6 +807,32 @@ class LegajosGUIV2(BaseApp):
         for _ in range(3):
             self.add_matricula_row()
 
+        # Documentos del convenio DZ
+        self.convenio_frame = ttk.LabelFrame(self.main, text="Documentos del convenio DZ")
+
+        row_entidad_convenio = ttk.Frame(self.convenio_frame)
+        row_entidad_convenio.pack(fill="x", padx=8, pady=(6, 2))
+
+        ttk.Label(row_entidad_convenio, text="Entidad convenio:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
+        self.entidad_convenio_entry = ttk.Entry(row_entidad_convenio, textvariable=self.entidad_convenio_var, width=35)
+        self.entidad_convenio_entry.grid(row=0, column=1, padx=5, pady=5, sticky="w")
+        ttk.Label(row_entidad_convenio, text="Ejemplo: MP_TAMBOPATA").grid(row=0, column=2, padx=5, pady=5, sticky="w")
+
+        ttk.Label(
+            row_entidad_convenio,
+            text="Escribe la entidad con la que se firmó el convenio. Ejemplos: MP_TAMBOPATA, UNAMAD, GORE_MADRE_DE_DIOS.",
+            font=("TkDefaultFont", 8)
+        ).grid(row=1, column=1, columnspan=2, padx=5, pady=(0, 5), sticky="w")
+
+        self.convenio_docs_container = ttk.Frame(self.convenio_frame)
+        self.convenio_docs_container.pack(fill="x", padx=8, pady=6)
+
+        convenio_buttons = ttk.Frame(self.convenio_frame)
+        convenio_buttons.pack(fill="x", padx=8, pady=(0, 8))
+
+        ttk.Button(convenio_buttons, text="Agregar documento de convenio", command=self.add_convenio_row).pack(side="left", padx=4)
+        ttk.Button(convenio_buttons, text="Quitar último", command=self.remove_last_convenio_row).pack(side="left", padx=4)
+
         self.ioarr_frame = ttk.LabelFrame(self.main, text="Documentos IOARR")
         self.ioarr_frame.pack(fill="x", pady=8)
 
@@ -787,6 +851,7 @@ class LegajosGUIV2(BaseApp):
 
         for _ in range(4):
             self.add_ioarr_row()
+        self.add_convenio_row()
 
         self.photos_frame = ttk.LabelFrame(self.main, text="Fotos para unir en orden (solo para Agregar foto)")
         self.photos_frame.pack(fill="x", pady=8)
@@ -1046,6 +1111,51 @@ class LegajosGUIV2(BaseApp):
         for btn in self.action_buttons:
             btn.configure(state="disabled" if running else "normal")
 
+    def add_convenio_row(self, path="", tipo="CONVENIO"):
+        if not hasattr(self, "convenio_rows"):
+            self.convenio_rows = []
+
+        row = ConvenioDzDocRow(
+            parent=self.convenio_docs_container,
+            app=self,
+            index=len(self.convenio_rows) + 1,
+            path=path,
+            tipo=tipo
+        )
+        self.convenio_rows.append(row)
+
+    def remove_convenio_row(self, row):
+        if row in self.convenio_rows:
+            self.convenio_rows.remove(row)
+            row.frame.destroy()
+            self.rebuild_convenio_rows()
+
+    def remove_last_convenio_row(self):
+        if self.convenio_rows:
+            row = self.convenio_rows.pop()
+            row.frame.destroy()
+            self.rebuild_convenio_rows()
+
+    def rebuild_convenio_rows(self):
+        data = [r.get_data() for r in getattr(self, "convenio_rows", [])]
+        for r in getattr(self, "convenio_rows", []):
+            try:
+                r.frame.destroy()
+            except Exception:
+                pass
+
+        self.convenio_rows = []
+        for path, tipo in data:
+            self.add_convenio_row(path, tipo)
+
+    def get_convenio_docs(self):
+        docs = []
+        for row in getattr(self, "convenio_rows", []):
+            path, tipo = row.get_data()
+            if path:
+                docs.append((path, tipo or "CONVENIO"))
+        return docs
+
     def add_ioarr_row(self):
         row = IoarrDocRow(
             self.ioarr_rows_container,
@@ -1188,18 +1298,18 @@ class LegajosGUIV2(BaseApp):
     def apply_action_visibility(self):
         action = self.current_action
 
-        src_enabled = action in {"add", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addruta", "addconvenio_dz"}
+        src_enabled = action in {"add", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addruta"}
         self.set_enabled(self.src_field.entry, src_enabled)
         self.set_enabled(self.src_field.button, src_enabled)
 
-        self.set_enabled(self.fecha_entry, action in {"add", "addmatricula", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addfoto", "addruta", "addconvenio_dz", "addioarr"})
+        self.set_enabled(self.fecha_entry, action in {"add", "addmatricula", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addfoto", "addruta", "addioarr"})
         self.set_enabled(self.codigo_entry, action in {"add", "addmatricula", "addchecklist", "addestado_situacional", "addfoto", "index"})
         self.set_enabled(self.categoria_combo, action == "add")
         self.set_enabled(self.ruta_entry, action in {"addruta", "addchecklist", "addestado_situacional", "addfoto"})
         self.set_enabled(self.tipo_combo, action == "addruta")
         self.set_enabled(self.years_entry, action == "init")
         self.set_enabled(self.responsable_entry, action in {"addruta", "addmantenimiento_grupal"})
-        self.set_enabled(self.obs_entry, action in {"addruta", "addmantenimiento_grupal", "addconvenio_dz", "addioarr"})
+        self.set_enabled(self.obs_entry, action in {"addruta", "addmantenimiento_grupal", "addioarr"})
         self.set_enabled(self.index_year_entry, action in {"index", "reporte_documental_anual"})
         self.set_enabled(self.filename_entry, action == "addficha_dz")
         self.set_enabled(self.siniestro_subtipo_combo, action == "add" and self.categoria_var.get() == "SINIESTROS")
@@ -1207,7 +1317,7 @@ class LegajosGUIV2(BaseApp):
         self.set_enabled(self.nombre_ioarr_entry, action == "addioarr")
         self.set_enabled(self.tipo_doc_ioarr_combo, False)
 
-        stations_enabled = action in {"init", "addruta", "addmantenimiento_grupal", "addconvenio_dz", "addioarr"}
+        stations_enabled = action in {"init", "addruta", "addmantenimiento_grupal", "addioarr"}
         self.set_enabled(self.station_listbox, stations_enabled)
         self.set_enabled(self.search_station_entry, stations_enabled)
 
@@ -1605,6 +1715,18 @@ class LegajosGUIV2(BaseApp):
             if hasattr(self, "add_ioarr_row"):
                 self.add_ioarr_row()
 
+        # Limpiar documentos de convenio DZ si existen
+        if hasattr(self, "convenio_rows"):
+            self.convenio_rows.clear()
+            if hasattr(self, "rebuild_convenio_rows"):
+                self.rebuild_convenio_rows()
+            if hasattr(self, "add_convenio_row"):
+                self.add_convenio_row()
+
+        # Limpiar entidad del convenio
+        if hasattr(self, "entidad_convenio_var"):
+            self.entidad_convenio_var.set("")
+
         # Limpiar nombre IOARR autogenerado
         if hasattr(self, "nombre_ioarr_var"):
             self.nombre_ioarr_var.set("")
@@ -1669,11 +1791,11 @@ class LegajosGUIV2(BaseApp):
         if not os.path.isfile(SCRIPT_DEFAULT):
             return False, f"No se encontró LEGAJOS_codigo.py en:\n{SCRIPT_DEFAULT}"
 
-        if action in {"add", "addmatricula", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addfoto", "addruta", "addconvenio_dz", "addioarr", "init", "index", "reporte_documental_anual"}:
+        if action in {"add", "addmatricula", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addfoto", "addruta", "addioarr", "init", "index", "reporte_documental_anual"}:
             if not os.path.isfile(MAESTRA_DEFAULT):
                 return False, f"No se encontró el Excel maestro en:\n{MAESTRA_DEFAULT}"
 
-        if action in {"add", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addruta", "addconvenio_dz"}:
+        if action in {"add", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addruta"}:
             src = os.path.realpath(self.src_field.entry.get().strip())
             if not src:
                 return False, "Selecciona el archivo fuente"
@@ -1704,7 +1826,7 @@ class LegajosGUIV2(BaseApp):
             if not self.get_photo_paths():
                 return False, "Debes cargar al menos un archivo en las casillas."
 
-        if action in {"add", "addmatricula", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addfoto", "addruta", "addconvenio_dz", "addioarr"}:
+        if action in {"add", "addmatricula", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addfoto", "addruta", "addioarr"}:
             if not self.fecha_entry.get().strip():
                 return False, "Selecciona una fecha"
 
@@ -1717,6 +1839,22 @@ class LegajosGUIV2(BaseApp):
 
         if action == "index" and not self.index_year_var.get().strip():
             return False, "Ingresa el año para reconstruir el índice"
+
+        if action == "addconvenio_dz":
+            if not self.entidad_convenio_var.get().strip():
+                return False, "Ingresa la entidad del convenio. Ejemplo: MP_TAMBOPATA"
+
+            docs = self.get_convenio_docs()
+            if not docs:
+                return False, "No has agregado documentos de convenio DZ"
+
+            for path, tipo in docs:
+                if not path:
+                    return False, "Hay un documento de convenio sin archivo"
+                if not os.path.exists(path):
+                    return False, f"No existe el documento de convenio: {path}"
+                if not tipo:
+                    return False, "Hay un documento de convenio sin tipo documental"
 
         if action == "reporte_documental_anual" and not self.index_year_var.get().strip():
             return False, "Ingresa el año para generar el reporte documental anual"
@@ -1858,12 +1996,18 @@ class LegajosGUIV2(BaseApp):
                 command += ["--copy"]
 
         elif action == "addconvenio_dz":
+            docs = self.get_convenio_docs()
+            srcs = [d[0] for d in docs]
+            tipos = [d[1] for d in docs]
+
             command += [
-                "--src", src,
+                "--srcs", *srcs,
                 "--dz", self.dz_var.get(),
                 "--fecha", self.fecha_entry.get().strip(),
-                "--tipo-documento-convenio", self.tipo_documento_convenio_var.get()
+                "--entidad-convenio", self.entidad_convenio_var.get().strip(),
+                "--tipos-documento-convenio", *tipos
             ]
+
             selected_codes = self.get_selected_station_codes()
             if selected_codes:
                 command += ["--estaciones", ",".join(selected_codes)]

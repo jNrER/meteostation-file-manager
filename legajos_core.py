@@ -410,6 +410,13 @@ def dz_convenios_dir(dz: str) -> Path:
     return dz_dir(dz) / DZ_CONVENIOS_DIRNAME
 
 
+def dz_convenio_entidad_dir(dz: str, entidad_convenio: str = "") -> Path:
+    entidad = slug(str(entidad_convenio).strip())
+    if entidad:
+        return dz_convenios_dir(dz) / entidad
+    return dz_convenios_dir(dz)
+
+
 def dz_ficha_matricula_dir(dz: str) -> Path:
     return dz_dir(dz) / FICHA_MATRICULA_DIRNAME
 
@@ -603,7 +610,7 @@ def dz_convenios_index_path_legacy(dz: str) -> Path:
 
 
 def ensure_dz_convenios_indices(dz: str):
-    headers = ["dz", "tipo_documento", "filename", "stored_at", "fecha", "estaciones_incluidas", "observaciones"]
+    headers = ["dz", "tipo_documento", "entidad_convenio", "filename", "stored_at", "fecha", "estaciones_incluidas", "observaciones"]
     write_xlsx_if_missing(dz_convenios_index_path(dz), headers)
     write_xlsx_if_missing(dz_convenios_index_path_legacy(dz), headers)
 
@@ -635,8 +642,11 @@ def append_ioarr_index_row(dz: str, year: int | str, row: list):
 # =========================
 
 
-def build_filename_convenio_dz(dz: str, fecha: datetime, ext: str, tipo_documento: str = "CONVENIO") -> str:
+def build_filename_convenio_dz(dz: str, fecha: datetime, ext: str, tipo_documento: str = "CONVENIO", entidad_convenio: str = "") -> str:
     tipo = slug(str(tipo_documento).upper().strip()) or "CONVENIO"
+    entidad = slug(str(entidad_convenio).strip())
+    if entidad:
+        return f"{tipo}_{dz.upper()}_{entidad}_{fecha.date()}.{ext.lstrip('.').lower()}"
     return f"{tipo}_{dz.upper()}_{fecha.date()}.{ext.lstrip('.').lower()}"
 def build_filename_estacion(categoria: str, dz: str, station_meta: dict[str, str], fecha: datetime, ext: str) -> str:
     return f"{categoria}_{dz.upper()}_{station_meta['folder_name']}_{fecha.date()}.{ext.lstrip('.').lower()}"
@@ -1017,7 +1027,8 @@ def add_convenio_dz(src: Path, dz: str, fecha_str_ddmmyyyy: str,
                     maestra_xlsx=STATIONS_XLSX_DEFAULT,
                     obs="",
                     copy=False,
-                    tipo_documento: str = "CONVENIO"):
+                    tipo_documento: str = "CONVENIO",
+                    entidad_convenio: str = ""):
     if not src.exists():
         raise FileNotFoundError(f"No existe el archivo fuente: {src}")
 
@@ -1025,22 +1036,25 @@ def add_convenio_dz(src: Path, dz: str, fecha_str_ddmmyyyy: str,
     if tipo_documento not in CONVENIO_DZ_DOC_TYPES:
         tipo_documento = "CONVENIO"
 
+    entidad_convenio = slug(str(entidad_convenio).strip())
+
     ensure_dirs(dz_convenios_dir(dz))
+    ensure_dirs(dz_convenio_entidad_dir(dz, entidad_convenio))
     ensure_dz_convenios_indices(dz)
 
     fecha = parse_fecha_ddmmyyyy(fecha_str_ddmmyyyy)
     year = fecha.year
     ext = src.suffix[1:] if src.suffix else "pdf"
 
-    fname = build_filename_convenio_dz(dz, fecha, ext, tipo_documento)
-    dst = dz_convenios_dir(dz) / fname
+    fname = build_filename_convenio_dz(dz, fecha, ext, tipo_documento, entidad_convenio)
+    dest_dir = dz_convenio_entidad_dir(dz, entidad_convenio)
+    dst = dest_dir / fname
 
-    # Evita sobrescribir si ya existe un archivo con el mismo nombre.
     original_stem = dst.stem
     original_suffix = dst.suffix
     counter = 2
     while dst.exists():
-        dst = dz_convenios_dir(dz) / f"{original_stem}_{counter:02d}{original_suffix}"
+        dst = dest_dir / f"{original_stem}_{counter:02d}{original_suffix}"
         counter += 1
 
     if copy:
@@ -1054,7 +1068,7 @@ def add_convenio_dz(src: Path, dz: str, fecha_str_ddmmyyyy: str,
 
     append_dz_convenios_row(
         dz,
-        [dz.upper(), tipo_documento, dst.name, rel_from_dz, fecha_str_ddmmyyyy, estaciones_str, obs]
+        [dz.upper(), tipo_documento, entidad_convenio, dst.name, rel_from_dz, fecha_str_ddmmyyyy, estaciones_str, obs]
     )
 
     if estaciones_meta:
@@ -1065,6 +1079,33 @@ def add_convenio_dz(src: Path, dz: str, fecha_str_ddmmyyyy: str,
             add_reference_to_stations(dz, year, [meta], "CONVENIOS", dst.name, rel_from_station)
 
     return dst
+
+
+def add_convenio_dz_documentos(srcs, tipos_documento, dz: str, fecha_str_ddmmyyyy: str,
+                              codigos_estaciones=None,
+                              maestra_xlsx=STATIONS_XLSX_DEFAULT,
+                              obs="",
+                              copy=False,
+                              entidad_convenio: str = "") -> list[Path]:
+    if len(srcs) != len(tipos_documento):
+        raise ValueError("La cantidad de archivos debe coincidir con la cantidad de tipos documentales.")
+
+    destinos = []
+    for src, tipo in zip(srcs, tipos_documento):
+        dst = add_convenio_dz(
+            src=src,
+            dz=dz,
+            fecha_str_ddmmyyyy=fecha_str_ddmmyyyy,
+            codigos_estaciones=codigos_estaciones,
+            maestra_xlsx=maestra_xlsx,
+            obs=obs,
+            copy=copy,
+            tipo_documento=tipo,
+            entidad_convenio=entidad_convenio
+        )
+        destinos.append(dst)
+
+    return destinos
 
 
 def add_ioarr_documento(src: Path, dz: str, fecha_str_ddmmyyyy: str,
@@ -1655,10 +1696,13 @@ def main():
     p_addr.add_argument("--copy", action="store_const", const=True, default=None)
 
     p_add_dz = sub.add_parser("addconvenio_dz", help="Registrar un convenio general de la DZ")
-    p_add_dz.add_argument("--src", required=True)
+    p_add_dz.add_argument("--src")
+    p_add_dz.add_argument("--srcs", nargs="+", help="Archivos fuente de convenio DZ")
     p_add_dz.add_argument("--dz")
     p_add_dz.add_argument("--fecha", help="DD-MM-YYYY")
-    p_add_dz.add_argument("--tipo-documento-convenio", choices=CONVENIO_DZ_DOC_TYPES, default="CONVENIO")
+    p_add_dz.add_argument("--entidad-convenio", default="", help="Entidad del convenio. Ejemplo: MP_TAMBOPATA")
+    p_add_dz.add_argument("--tipo-documento-convenio", choices=CONVENIO_DZ_DOC_TYPES, default="CONVENIO", help="Tipo para archivo único")
+    p_add_dz.add_argument("--tipos-documento-convenio", nargs="+", choices=CONVENIO_DZ_DOC_TYPES, help="Tipos para varios archivos")
     p_add_dz.add_argument("--estaciones", default="", help="Códigos de estaciones incluidos separados por coma (opcional)")
     p_add_dz.add_argument("--maestra", default=str(STATIONS_XLSX_DEFAULT), help="Excel maestro de estaciones")
     p_add_dz.add_argument("--obs", default="")
@@ -1787,21 +1831,39 @@ def main():
         print(f"✅ Informe por ruta agregado: {dst}")
 
     elif args.cmd == "addconvenio_dz":
-        src = Path(args.src).expanduser()
-        if not src.exists():
-            print(f"❌ No existe el archivo fuente: {src}", file=sys.stderr); sys.exit(1)
+        src_values = args.srcs or ([args.src] if args.src else [])
+        if not src_values:
+            print("❌ Debes indicar --srcs archivo1 archivo2 ... o --src archivo", file=sys.stderr); sys.exit(1)
+
+        srcs = [Path(x).expanduser() for x in src_values]
+        for src in srcs:
+            if not src.exists():
+                print(f"❌ No existe el archivo fuente: {src}", file=sys.stderr); sys.exit(1)
+
+        if getattr(args, "tipos_documento_convenio", None):
+            tipos = args.tipos_documento_convenio
+            if len(tipos) != len(srcs):
+                print("❌ La cantidad de --tipos-documento-convenio debe coincidir con la cantidad de --srcs", file=sys.stderr); sys.exit(1)
+        else:
+            tipos = [getattr(args, "tipo_documento_convenio", "CONVENIO")] * len(srcs)
+
         dzv, fecha, codigos, copy = interactive_for_convenio_dz(args)
-        dst = add_convenio_dz(
-            src,
-            dzv,
-            fecha,
-            codigos,
-            Path(args.maestra).expanduser(),
-            args.obs or "",
-            copy,
-            getattr(args, "tipo_documento_convenio", "CONVENIO")
+
+        destinos = add_convenio_dz_documentos(
+            srcs=srcs,
+            tipos_documento=tipos,
+            dz=dzv,
+            fecha_str_ddmmyyyy=fecha,
+            codigos_estaciones=codigos,
+            maestra_xlsx=Path(args.maestra).expanduser(),
+            obs=args.obs or "",
+            copy=copy,
+            entidad_convenio=getattr(args, "entidad_convenio", "")
         )
-        print(f"✅ Convenio general de DZ agregado: {dst}")
+
+        print("✅ Documentos de convenio DZ agregados:")
+        for dst in destinos:
+            print(f"   - {dst}")
 
     elif args.cmd == "addioarr":
         src_values = args.srcs or ([args.src] if args.src else [])
