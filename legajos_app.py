@@ -88,6 +88,18 @@ IOARR_DOC_TYPES = [
     "OTRO",
 ]
 
+CONVENIO_DZ_DOC_TYPES = [
+    "CONVENIO",
+    "CONVENIO_MARCO",
+    "ADENDA",
+    "ACTA_TRANSFERENCIA_FISICA",
+    "ACTA_REUNION",
+    "INFORME_SUSTENTO",
+    "OFICIO",
+    "MEMORANDO",
+    "OTRO",
+]
+
 
 def slug_text(text):
     text = str(text or "").strip()
@@ -433,6 +445,23 @@ class LegajosGUIV2(BaseApp):
 
         self.photo_rows = []
         self.matricula_rows = []
+        # Datos específicos para convenios DZ
+        self.convenio_frame = ttk.LabelFrame(main, text="Datos del convenio DZ")
+        row_convenio = ttk.Frame(self.convenio_frame)
+        row_convenio.pack(fill="x", padx=8, pady=6)
+
+        ttk.Label(row_convenio, text="Tipo documento:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
+        self.tipo_documento_convenio_var = tk.StringVar(value="CONVENIO")
+        self.tipo_documento_convenio_combo = ttk.Combobox(
+            row_convenio,
+            textvariable=self.tipo_documento_convenio_var,
+            values=CONVENIO_DZ_DOC_TYPES,
+            state="readonly",
+            width=32
+        )
+        self.tipo_documento_convenio_combo.grid(row=0, column=1, padx=5, pady=5, sticky="w")
+
+
         self.ioarr_rows = []
         self.temp_generated_file = None
         self.action_buttons = []
@@ -1197,6 +1226,7 @@ class LegajosGUIV2(BaseApp):
             row.set_enabled(matricula_enabled)
 
         ioarr_enabled = action == "addioarr"
+        convenio_enabled = action == "addconvenio_dz"
         if hasattr(self, "ioarr_frame"):
             if ioarr_enabled:
                 # Se coloca en una posición fija: debajo del buscador de estación individual.
@@ -1579,6 +1609,10 @@ class LegajosGUIV2(BaseApp):
         if hasattr(self, "nombre_ioarr_var"):
             self.nombre_ioarr_var.set("")
 
+        # Limpiar nombre descriptivo del convenio
+        if hasattr(self, "nombre_convenio_var"):
+            self.nombre_convenio_var.set("")
+
         # Mantener variable/sensor en un valor seguro por defecto
         if hasattr(self, "variable_sensor_var"):
             self.variable_sensor_var.set("TEMPERATURA")
@@ -1827,7 +1861,8 @@ class LegajosGUIV2(BaseApp):
             command += [
                 "--src", src,
                 "--dz", self.dz_var.get(),
-                "--fecha", self.fecha_entry.get().strip()
+                "--fecha", self.fecha_entry.get().strip(),
+                "--tipo-documento-convenio", self.tipo_documento_convenio_var.get()
             ]
             selected_codes = self.get_selected_station_codes()
             if selected_codes:
