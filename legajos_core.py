@@ -12,7 +12,7 @@ LEGAJOS_codigo.py — Gestor de legajos para SGR/DRD SENAMHI
     - RUTA_XX (archivos de checklist, estado situacional y fotos juntos)
     - MANTENIMIENTO_GRUPAL_SIN_RUTA a nivel DZ/año para informes que incluyen varias estaciones sin ruta
 - Incluye INSTALACION_ESTACION como sección por estación para actas, fichas e informes de matrícula
-- Comandos: init, add, addmatricula, addmantenimiento_grupal, addruta, addconvenio_dz, addioarr, addchecklist,
+- Comandos: init, add, addmatricula, addmantenimiento_grupal, addruta, addaforo_sin_ruta, addconvenio_dz, addioarr, addchecklist,
             addestado_situacional, addfoto, addficha_dz, reporte_documental_anual, index, mk_ficha_dz.
 """
 
@@ -162,6 +162,8 @@ DZ_CONVENIOS_DIRNAME = "CONVENIOS"
 FICHA_MATRICULA_DIRNAME = "Ficha de Matricula"
 
 IOARR_DIRNAME = "IOARR"
+AFOROS_DIRNAME = "AFOROS"
+AFOROS_SIN_RUTA_DIRNAME = "SIN_RUTA"
 
 IOARR_DOC_TYPES = [
     "NOTA_ELEVACION_DHI",
@@ -433,6 +435,22 @@ def ioarr_root_dir(dz: str, year: int | str) -> Path:
     return year_dir(dz, year) / IOARR_DIRNAME
 
 
+def aforos_root_dir(dz: str, year: int | str) -> Path:
+    return year_dir(dz, year) / AFOROS_DIRNAME
+
+
+def aforos_sin_ruta_dir(dz: str, year: int | str) -> Path:
+    return aforos_root_dir(dz, year) / AFOROS_SIN_RUTA_DIRNAME
+
+
+def aforos_sin_ruta_index_path(dz: str, year: int | str) -> Path:
+    return aforos_sin_ruta_dir(dz, year) / f"legajo_aforos_sin_ruta_index_{dz.upper()}_{int(year):04d}.xlsx"
+
+
+def aforos_sin_ruta_index_path_legacy(dz: str, year: int | str) -> Path:
+    return aforos_sin_ruta_dir(dz, year) / "legajo_aforos_sin_ruta_index.xlsx"
+
+
 def ioarr_project_dir(dz: str, year: int | str, nombre_ioarr: str) -> Path:
     nombre = slug(str(nombre_ioarr).strip()) or "SIN_NOMBRE"
     return ioarr_root_dir(dz, year) / nombre
@@ -637,6 +655,22 @@ def append_ioarr_index_row(dz: str, year: int | str, row: list):
     append_xlsx_row(ioarr_index_path(dz, year), row)
     append_xlsx_row(ioarr_index_path_legacy(dz, year), row)
 
+
+def ensure_aforos_sin_ruta_indices(dz: str, year: int | str):
+    headers = [
+        "DZ", "Año", "Tipo", "Archivo", "Path",
+        "Estaciones_incluidas", "Fecha_ejecucion", "Responsable", "Observaciones"
+    ]
+    ensure_dirs(aforos_sin_ruta_dir(dz, year))
+    write_xlsx_if_missing(aforos_sin_ruta_index_path(dz, year), headers)
+    write_xlsx_if_missing(aforos_sin_ruta_index_path_legacy(dz, year), headers)
+
+
+def append_aforos_sin_ruta_index_row(dz: str, year: int | str, row: list):
+    ensure_aforos_sin_ruta_indices(dz, year)
+    append_xlsx_row(aforos_sin_ruta_index_path(dz, year), row)
+    append_xlsx_row(aforos_sin_ruta_index_path_legacy(dz, year), row)
+
 # =========================
 # NOMBRES DE ARCHIVO
 # =========================
@@ -672,6 +706,10 @@ def build_filename_ioarr(dz: str, tipo_documento: str, nombre_ioarr: str, fecha:
     tipo = slug(str(tipo_documento).upper().strip()) or "OTRO"
     nombre = slug(str(nombre_ioarr).strip()) or "SIN_NOMBRE"
     return f"IOARR_{dz.upper()}_{tipo}-{nombre}_{fecha.date()}.{ext.lstrip('.').lower()}"
+
+
+def build_filename_aforo_sin_ruta(dz: str, fecha: datetime, ext: str) -> str:
+    return f"AFORO_SIN_RUTA_{dz.upper()}_{fecha.date()}.{ext.lstrip('.').lower()}"
 
 
 def build_filename_checklist(ruta: str, dz: str, station_meta: dict[str, str], fecha: datetime, ext: str) -> str:
@@ -1208,6 +1246,64 @@ def add_ioarr_documentos(srcs: list[Path], tipos_documento: list[str],
 
     return destinos
 
+def add_aforo_sin_ruta(src: Path, dz: str, fecha_str_ddmmyyyy: str,
+                         codigos_estaciones: list[str] | None = None,
+                         maestra_xlsx: Path = STATIONS_XLSX_DEFAULT,
+                         responsable: str = "",
+                         obs: str = "",
+                         copy=False):
+    """
+    Registra un aforo sin ruta a nivel DZ/año/AFOROS/SIN_RUTA y agrega
+    una referencia en el índice de cada estación seleccionada.
+    """
+    if not src.exists():
+        raise FileNotFoundError(f"No existe el archivo fuente: {src}")
+
+    fecha = parse_fecha_ddmmyyyy(fecha_str_ddmmyyyy)
+    year = fecha.year
+    ext = src.suffix[1:] if src.suffix else "pdf"
+
+    dest_dir = aforos_sin_ruta_dir(dz, year)
+    ensure_dirs(dest_dir)
+    ensure_aforos_sin_ruta_indices(dz, year)
+
+    fname = build_filename_aforo_sin_ruta(dz, fecha, ext)
+    dst = dest_dir / fname
+
+    original_stem = dst.stem
+    original_suffix = dst.suffix
+    counter = 2
+    while dst.exists():
+        dst = dest_dir / f"{original_stem}_{counter:02d}{original_suffix}"
+        counter += 1
+    fname = dst.name
+
+    if copy:
+        shutil.copy2(src, dst)
+    else:
+        shutil.move(str(src), str(dst))
+
+    estaciones_meta = [get_station_meta(c, maestra_xlsx) for c in (codigos_estaciones or [])]
+    estaciones_str = ", ".join(meta["folder_name"] for meta in estaciones_meta)
+    relpath = os.path.relpath(dst, start=aforos_root_dir(dz, year))
+
+    row = [
+        dz.upper(), f"{int(year):04d}", "AFORO_SIN_RUTA",
+        fname, relpath, estaciones_str, fecha_str_ddmmyyyy, responsable, obs
+    ]
+    append_aforos_sin_ruta_index_row(dz, year, row)
+
+    if estaciones_meta:
+        for meta in estaciones_meta:
+            base_est = estacion_dir(dz, year, meta)
+            ensure_dirs(base_est)
+            write_estacion_readme(dz, year, meta)
+            rel_from_station = os.path.relpath(dst, start=base_est)
+            add_reference_to_stations(dz, year, [meta], "AFORO_SIN_RUTA", fname, rel_from_station)
+
+    return dst
+
+
 def add_checklist_estacion(src: Path, dz: str, ruta: str, codigo: str, fecha_str_ddmmyyyy: str, maestra_xlsx: Path, copy=False):
     if not src.exists():
         raise FileNotFoundError(f"No existe el archivo fuente: {src}")
@@ -1514,6 +1610,9 @@ def init_structure(dz: str, years=(2024, 2025), codigos_estaciones=None, maestra
         ensure_dirs(ioarr_root_dir(dz, y))
         ensure_ioarr_indices(dz, y)
 
+        ensure_dirs(aforos_sin_ruta_dir(dz, y))
+        ensure_aforos_sin_ruta_indices(dz, y)
+
 # =========================
 # PROMPTS
 # =========================
@@ -1695,6 +1794,17 @@ def main():
     p_addr.add_argument("--obs", default="")
     p_addr.add_argument("--copy", action="store_const", const=True, default=None)
 
+
+    p_aforo_sin_ruta = sub.add_parser("addaforo_sin_ruta", help="Registrar un aforo sin ruta, por fecha")
+    p_aforo_sin_ruta.add_argument("--src", required=True, help="Archivo fuente")
+    p_aforo_sin_ruta.add_argument("--dz", help="Ej: DZ06")
+    p_aforo_sin_ruta.add_argument("--fecha", help="DD-MM-YYYY")
+    p_aforo_sin_ruta.add_argument("--estaciones", help="Códigos de estaciones incluidos separados por coma")
+    p_aforo_sin_ruta.add_argument("--maestra", default=str(STATIONS_XLSX_DEFAULT), help="Excel maestro de estaciones")
+    p_aforo_sin_ruta.add_argument("--responsable", default="")
+    p_aforo_sin_ruta.add_argument("--obs", default="")
+    p_aforo_sin_ruta.add_argument("--copy", action="store_const", const=True, default=None)
+
     p_add_dz = sub.add_parser("addconvenio_dz", help="Registrar un convenio general de la DZ")
     p_add_dz.add_argument("--src")
     p_add_dz.add_argument("--srcs", nargs="+", help="Archivos fuente de convenio DZ")
@@ -1829,6 +1939,29 @@ def main():
         dzv, ruta, tipo, fecha, codigos, copy = interactive_for_ruta(args)
         dst = add_report_ruta(src, dzv, ruta, tipo, fecha, codigos, Path(args.maestra).expanduser(), args.responsable, args.obs, copy)
         print(f"✅ Informe por ruta agregado: {dst}")
+
+    elif args.cmd == "addaforo_sin_ruta":
+        src = Path(args.src).expanduser()
+        if not src.exists():
+            print(f"❌ No existe el archivo fuente: {src}", file=sys.stderr); sys.exit(1)
+
+        maestra = Path(args.maestra).expanduser()
+        dzv = args.dz or prompt_dz()
+        fecha = args.fecha or prompt_fecha_ddmmyyyy()
+        codigos = [x.strip() for x in (args.estaciones or "").split(",") if x.strip()] or prompt_codigos_estaciones(maestra)
+        copy = args.copy if args.copy is not None else prompt_copy()
+
+        dst = add_aforo_sin_ruta(
+            src=src,
+            dz=dzv,
+            fecha_str_ddmmyyyy=fecha,
+            codigos_estaciones=codigos,
+            maestra_xlsx=maestra,
+            responsable=args.responsable,
+            obs=args.obs,
+            copy=copy
+        )
+        print(f"✅ Aforo sin ruta agregado: {dst}")
 
     elif args.cmd == "addconvenio_dz":
         src_values = args.srcs or ([args.src] if args.src else [])

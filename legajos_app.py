@@ -561,18 +561,19 @@ class LegajosGUIV2(BaseApp):
 
         buttons = [
             ("Agregar documento por estación", "add"),
-            ("Agregar mantenimiento grupal sin ruta", "addmantenimiento_grupal"),
-            ("Agregar instalación de estación", "addmatricula"),
+            ("Agregar mantenimiento grupal", "addmantenimiento_grupal"),
+            ("Agregar documentos de instalación", "addmatricula"),
             ("Agregar checklist de ruta", "addchecklist"),
             ("Agregar estado situacional de ruta", "addestado_situacional"),
             ("Agregar foto de ruta", "addfoto"),
-            ("Agregar ruta", "addruta"),
-            ("Agregar convenio DZ"),
+            ("Agregar informe por ruta", "addruta"),
+            ("Agregar aforo sin ruta", "addaforo_sin_ruta"),
+            ("Agregar convenio DZ", "addconvenio_dz"),
             ("Agregar documento IOARR", "addioarr"),
             ("Generar reporte documental anual", "reporte_documental_anual"),
-            ("Crear estructura", "init"),
+            ("Inicializar estructura", "init"),
             ("Reconstruir índice", "index"),
-            ("Crear ficha DZ", "addficha_dz"),
+            ("Agregar ficha DZ", "addficha_dz"),
             ("Crear carpeta ficha DZ", "mk_ficha_dz"),
         ]
 
@@ -907,7 +908,7 @@ class LegajosGUIV2(BaseApp):
         help_frame.pack(fill="x", padx=8, pady=(0, 6))
         ttk.Label(
             help_frame,
-            text="Usa Ctrl o Shift para seleccionar varias estaciones. Se usa en: Crear estructura, Agregar ruta, Agregar mantenimiento grupal, Agregar convenio DZ y Agregar documento IOARR."
+            text="Usa Ctrl o Shift para seleccionar varias estaciones. Se usa en: Crear estructura, Agregar ruta, Agregar mantenimiento grupal, Agregar aforo sin ruta, Agregar convenio DZ y Agregar documento IOARR."
         ).pack(anchor="w")
 
         exec_frame = ttk.Frame(self.main)
@@ -1284,6 +1285,7 @@ class LegajosGUIV2(BaseApp):
             "addestado_situacional": "Agregar estado situacional de ruta",
             "addfoto": "Agregar foto de ruta",
             "addruta": "Agregar ruta",
+            "addaforo_sin_ruta": "Agregar aforo sin ruta",
             "addconvenio_dz": "Agregar convenio DZ",
             "addioarr": "Agregar documento IOARR",
             "reporte_documental_anual": "Generar reporte documental anual",
@@ -1298,18 +1300,18 @@ class LegajosGUIV2(BaseApp):
     def apply_action_visibility(self):
         action = self.current_action
 
-        src_enabled = action in {"add", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addruta"}
+        src_enabled = action in {"add", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addruta", "addaforo_sin_ruta"}
         self.set_enabled(self.src_field.entry, src_enabled)
         self.set_enabled(self.src_field.button, src_enabled)
 
-        self.set_enabled(self.fecha_entry, action in {"add", "addmatricula", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addfoto", "addruta", "addioarr"})
+        self.set_enabled(self.fecha_entry, action in {"add", "addmatricula", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addfoto", "addruta", "addioarr", "addaforo_sin_ruta"})
         self.set_enabled(self.codigo_entry, action in {"add", "addmatricula", "addchecklist", "addestado_situacional", "addfoto", "index"})
         self.set_enabled(self.categoria_combo, action == "add")
         self.set_enabled(self.ruta_entry, action in {"addruta", "addchecklist", "addestado_situacional", "addfoto"})
         self.set_enabled(self.tipo_combo, action == "addruta")
         self.set_enabled(self.years_entry, action == "init")
-        self.set_enabled(self.responsable_entry, action in {"addruta", "addmantenimiento_grupal"})
-        self.set_enabled(self.obs_entry, action in {"addruta", "addmantenimiento_grupal", "addioarr"})
+        self.set_enabled(self.responsable_entry, action in {"addruta", "addmantenimiento_grupal", "addaforo_sin_ruta"})
+        self.set_enabled(self.obs_entry, action in {"addruta", "addmantenimiento_grupal", "addioarr", "addaforo_sin_ruta"})
         self.set_enabled(self.index_year_entry, action in {"index", "reporte_documental_anual"})
         self.set_enabled(self.filename_entry, action == "addficha_dz")
         self.set_enabled(self.siniestro_subtipo_combo, action == "add" and self.categoria_var.get() == "SINIESTROS")
@@ -1317,7 +1319,7 @@ class LegajosGUIV2(BaseApp):
         self.set_enabled(self.nombre_ioarr_entry, action == "addioarr")
         self.set_enabled(self.tipo_doc_ioarr_combo, False)
 
-        stations_enabled = action in {"init", "addruta", "addmantenimiento_grupal", "addioarr"}
+        stations_enabled = action in {"init", "addruta", "addmantenimiento_grupal", "addioarr", "addconvenio_dz", "addaforo_sin_ruta"}
         self.set_enabled(self.station_listbox, stations_enabled)
         self.set_enabled(self.search_station_entry, stations_enabled)
 
@@ -1337,6 +1339,7 @@ class LegajosGUIV2(BaseApp):
 
         ioarr_enabled = action == "addioarr"
         convenio_enabled = action == "addconvenio_dz"
+
         if hasattr(self, "ioarr_frame"):
             if ioarr_enabled:
                 # Se coloca en una posición fija: debajo del buscador de estación individual.
@@ -1344,6 +1347,13 @@ class LegajosGUIV2(BaseApp):
                 self.ioarr_frame.pack(fill="x", pady=8, after=self.single_station_frame)
             else:
                 self.ioarr_frame.pack_forget()
+
+        if hasattr(self, "convenio_frame"):
+            if convenio_enabled:
+                self.convenio_frame.pack(fill="x", pady=8, after=self.single_station_frame)
+            else:
+                self.convenio_frame.pack_forget()
+
         for row in getattr(self, "ioarr_rows", []):
             row.set_enabled(ioarr_enabled)
 
@@ -1791,11 +1801,11 @@ class LegajosGUIV2(BaseApp):
         if not os.path.isfile(SCRIPT_DEFAULT):
             return False, f"No se encontró LEGAJOS_codigo.py en:\n{SCRIPT_DEFAULT}"
 
-        if action in {"add", "addmatricula", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addfoto", "addruta", "addioarr", "init", "index", "reporte_documental_anual"}:
+        if action in {"add", "addmatricula", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addfoto", "addruta", "addioarr", "addaforo_sin_ruta", "init", "index", "reporte_documental_anual"}:
             if not os.path.isfile(MAESTRA_DEFAULT):
                 return False, f"No se encontró el Excel maestro en:\n{MAESTRA_DEFAULT}"
 
-        if action in {"add", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addruta"}:
+        if action in {"add", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addruta", "addaforo_sin_ruta"}:
             src = os.path.realpath(self.src_field.entry.get().strip())
             if not src:
                 return False, "Selecciona el archivo fuente"
@@ -1826,7 +1836,10 @@ class LegajosGUIV2(BaseApp):
             if not self.get_photo_paths():
                 return False, "Debes cargar al menos un archivo en las casillas."
 
-        if action in {"add", "addmatricula", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addfoto", "addruta", "addioarr"}:
+        if action == "addaforo_sin_ruta" and not self.get_selected_station_codes():
+            return False, "Selecciona al menos una estación para registrar la referencia del aforo sin ruta"
+
+        if action in {"add", "addmatricula", "addmantenimiento_grupal", "addchecklist", "addestado_situacional", "addfoto", "addruta", "addioarr", "addaforo_sin_ruta"}:
             if not self.fecha_entry.get().strip():
                 return False, "Selecciona una fecha"
 
@@ -1982,6 +1995,23 @@ class LegajosGUIV2(BaseApp):
                 "--dz", self.dz_var.get(),
                 "--ruta", self.ruta_var.get().strip(),
                 "--tipo", self.tipo_var.get(),
+                "--fecha", self.fecha_entry.get().strip()
+            ]
+            selected_codes = self.get_selected_station_codes()
+            if selected_codes:
+                command += ["--estaciones", ",".join(selected_codes)]
+            command += ["--maestra", MAESTRA_DEFAULT]
+            if self.responsable_var.get().strip():
+                command += ["--responsable", self.responsable_var.get().strip()]
+            if self.obs_var.get().strip():
+                command += ["--obs", self.obs_var.get().strip()]
+            if self.copy_mode_var.get() == "copy":
+                command += ["--copy"]
+
+        elif action == "addaforo_sin_ruta":
+            command += [
+                "--src", src,
+                "--dz", self.dz_var.get(),
                 "--fecha", self.fecha_entry.get().strip()
             ]
             selected_codes = self.get_selected_station_codes()
