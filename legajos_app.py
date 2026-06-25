@@ -499,6 +499,7 @@ class LegajosGUIV2(BaseApp):
         self.matricula_rows = []
         self.tipo_documento_convenio_var = tk.StringVar(value="CONVENIO")
         self.entidad_convenio_var = tk.StringVar(value="")
+        self.keep_aforo_stations_var = tk.BooleanVar(value=False)
 
 
         self.ioarr_rows = []
@@ -913,6 +914,13 @@ class LegajosGUIV2(BaseApp):
             text="Usa Ctrl o Shift para seleccionar varias estaciones. Se usa en: Crear estructura, Agregar ruta, Agregar mantenimiento grupal, Agregar aforo sin ruta, Agregar convenio DZ y Agregar documento IOARR."
         ).pack(anchor="w")
 
+        self.keep_aforo_stations_check = ttk.Checkbutton(
+            help_frame,
+            text="Mantener estaciones seleccionadas después de ejecutar aforo sin ruta",
+            variable=self.keep_aforo_stations_var
+        )
+        self.keep_aforo_stations_check.pack(anchor="w", pady=(4, 0))
+
         exec_frame = ttk.Frame(self.main)
         exec_frame.pack(fill="x", pady=10)
 
@@ -1326,6 +1334,8 @@ class LegajosGUIV2(BaseApp):
         stations_enabled = action in {"init", "addruta", "addmantenimiento_grupal", "addioarr", "addconvenio_dz", "addaforo_sin_ruta"}
         self.set_enabled(self.station_listbox, stations_enabled)
         self.set_enabled(self.search_station_entry, stations_enabled)
+        if hasattr(self, "keep_aforo_stations_check"):
+            self.set_enabled(self.keep_aforo_stations_check, action == "addaforo_sin_ruta")
 
         single_station_enabled = action in {"add", "addmatricula", "addchecklist", "addestado_situacional", "addfoto", "index"}
         self.set_enabled(self.search_single_station_entry, single_station_enabled)
@@ -1707,13 +1717,20 @@ class LegajosGUIV2(BaseApp):
             self.station_code_var.set("")
 
         # Limpiar selección múltiple de estaciones
-        if hasattr(self, "selected_station_codes"):
-            self.selected_station_codes.clear()
-        if hasattr(self, "station_listbox"):
-            try:
-                self.station_listbox.selection_clear(0, tk.END)
-            except Exception:
-                pass
+        mantener_estaciones_aforo = (
+            getattr(self, "current_action", "") == "addaforo_sin_ruta"
+            and hasattr(self, "keep_aforo_stations_var")
+            and self.keep_aforo_stations_var.get()
+        )
+
+        if not mantener_estaciones_aforo:
+            if hasattr(self, "selected_station_codes"):
+                self.selected_station_codes.clear()
+            if hasattr(self, "station_listbox"):
+                try:
+                    self.station_listbox.selection_clear(0, tk.END)
+                except Exception:
+                    pass
 
         # Refrescar lista visible si existe
         if hasattr(self, "filter_station_list"):
@@ -1782,6 +1799,8 @@ class LegajosGUIV2(BaseApp):
         self.search_single_station_var.set("")
         self.copy_mode_var.set("move")
         self.overwrite_var.set(False)
+        if hasattr(self, "keep_aforo_stations_var"):
+            self.keep_aforo_stations_var.set(False)
         self.siniestro_subtipo_var.set("ROBO")
         self.variable_sensor_var.set("TEMPERATURA")
         self.nombre_ioarr_var.set("")
