@@ -79,7 +79,7 @@ if not STATIONS_XLSX_DEFAULT.is_absolute():
 CATEGORIAS_ESTACION = [
     "MANTENIMIENTO",
     "CHECKLIST_MANTENIMIENTO",
-    "ESTADO_SITUACIONAL",
+    "ESTADO_SITUACIONAL_PREVIA_MANTENIMIENTO",
     "FOTO_MANTENIMIENTO",
     "INSPECCION",
     "CALIBRACION",
@@ -166,8 +166,7 @@ DZ_CONVENIOS_DIRNAME = "CONVENIOS"
 FICHA_MATRICULA_DIRNAME = "Ficha de Matricula"
 
 IOARR_DIRNAME = "IOARR"
-AFOROS_DIRNAME = "AFOROS"
-AFOROS_SIN_RUTA_DIRNAME = "SIN_RUTA"
+AFOROS_SIN_RUTA_DIRNAME = "AFOROS SIN RUTA"
 
 IOARR_DOC_TYPES = [
     "NOTA_ELEVACION_DHI",
@@ -440,11 +439,11 @@ def ioarr_root_dir(dz: str, year: int | str) -> Path:
 
 
 def aforos_root_dir(dz: str, year: int | str) -> Path:
-    return year_dir(dz, year) / AFOROS_DIRNAME
+    return year_dir(dz, year)
 
 
 def aforos_sin_ruta_dir(dz: str, year: int | str) -> Path:
-    return aforos_root_dir(dz, year) / AFOROS_SIN_RUTA_DIRNAME
+    return year_dir(dz, year) / AFOROS_SIN_RUTA_DIRNAME
 
 
 def aforos_sin_ruta_index_path(dz: str, year: int | str) -> Path:
@@ -695,6 +694,10 @@ def build_filename_certificado_comprobacion_sensor(variable_sensor: str, dz: str
     return f"CERTIFICADO_COMPROBACION_SENSOR_{variable}_{dz.upper()}_{station_meta['folder_name']}_{fecha.date()}.{ext.lstrip('.').lower()}"
 
 
+def build_filename_estado_situacional_individual(dz: str, station_meta: dict[str, str], fecha: datetime, ext: str) -> str:
+    return f"ESTADO_SITUACIONAL_PREVIA_MANTENIMIENTO_{dz.upper()}_{station_meta['folder_name']}_{fecha.date()}.{ext.lstrip('.').lower()}"
+
+
 def build_filename_ruta(ruta: str, tipo: str, fecha: datetime, ext: str) -> str:
     tipo_singular = RUTA_SINGULAR.get(tipo, tipo)
     return f"{ruta}_{tipo_singular}_{fecha.date()}.{ext.lstrip('.').lower()}"
@@ -877,9 +880,12 @@ def add_report_estacion(src: Path, categoria: str, dz: str, codigo: str, fecha_s
     year = fecha.year
     ext = src.suffix[1:] if src.suffix else "pdf"
 
-    if categoria in {"MANTENIMIENTO", "CHECKLIST_MANTENIMIENTO", "ESTADO_SITUACIONAL"}:
+    if categoria in {"MANTENIMIENTO", "CHECKLIST_MANTENIMIENTO"}:
         dest_dir = mantenimiento_correctivo_dir_estacion(dz, year, station_meta)
         fname = build_filename_estacion(categoria, dz, station_meta, fecha, ext)
+    elif categoria == "ESTADO_SITUACIONAL_PREVIA_MANTENIMIENTO":
+        dest_dir = mantenimiento_correctivo_dir_estacion(dz, year, station_meta)
+        fname = build_filename_estado_situacional_individual(dz, station_meta, fecha, ext)
     elif categoria == "FOTO_MANTENIMIENTO":
         dest_dir = mantenimiento_correctivo_dir_estacion(dz, year, station_meta)
         fname = build_filename_foto_mantenimiento_individual(dz, station_meta, fecha, ext)
@@ -1263,7 +1269,7 @@ def add_aforo_sin_ruta(src: Path, dz: str, fecha_str_ddmmyyyy: str,
                          obs: str = "",
                          copy=False):
     """
-    Registra un aforo sin ruta a nivel DZ/año/AFOROS/SIN_RUTA y agrega
+    Registra un aforo sin ruta a nivel DZ/año/AFOROS SIN RUTA y agrega
     una referencia en el índice de cada estación seleccionada.
     """
     if not src.exists():
