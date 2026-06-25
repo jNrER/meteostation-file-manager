@@ -234,6 +234,26 @@ def ensure_dirs(p: Path):
     p.mkdir(parents=True, exist_ok=True)
 
 
+def to_roman(num: int) -> str:
+    """Convierte enteros positivos a números romanos. Ejemplo: 2 -> II."""
+    if num <= 0:
+        raise ValueError("El número debe ser positivo para convertirlo a romano.")
+
+    values = [
+        (1000, "M"), (900, "CM"), (500, "D"), (400, "CD"),
+        (100, "C"), (90, "XC"), (50, "L"), (40, "XL"),
+        (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I"),
+    ]
+
+    result = []
+    remaining = num
+    for value, symbol in values:
+        while remaining >= value:
+            result.append(symbol)
+            remaining -= value
+    return "".join(result)
+
+
 def parse_fecha_ddmmyyyy(fecha_str: str) -> datetime:
     try:
         return datetime.strptime(fecha_str, DATE_INPUT_FMT)
@@ -704,8 +724,9 @@ def build_filename_ruta(ruta: str, tipo: str, fecha: datetime, ext: str) -> str:
 
 
 def build_filename_mantenimiento_grupal(dz: str, src_stem: str, fecha: datetime, ext: str) -> str:
-    nombre_base = slug(src_stem) or "INFORME"
-    return f"MANTENIMIENTO_GRUPAL_SIN_RUTA_{dz.upper()}_{nombre_base}_{fecha.date()}.{ext.lstrip('.').lower()}"
+    # Se mantiene src_stem por compatibilidad, pero ya no se usa el nombre original
+    # del archivo fuente para mantener consistencia con las demás secciones.
+    return f"MANTENIMIENTO_GRUPAL_SIN_RUTA_{dz.upper()}_{fecha.date()}.{ext.lstrip('.').lower()}"
 
 
 
@@ -1054,6 +1075,14 @@ def add_mantenimiento_grupal(src: Path, dz: str, fecha_str_ddmmyyyy: str,
 
     fname = build_filename_mantenimiento_grupal(dz, src.stem, fecha, ext)
     dst = dest_dir / fname
+
+    original_stem = dst.stem
+    original_suffix = dst.suffix
+    counter = 2
+    while dst.exists():
+        dst = dest_dir / f"{original_stem}_{to_roman(counter)}{original_suffix}"
+        counter += 1
+    fname = dst.name
 
     if copy:
         shutil.copy2(src, dst)
