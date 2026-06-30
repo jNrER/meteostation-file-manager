@@ -899,8 +899,11 @@ class LegajosGUIV2(BaseApp):
         list_frame = ttk.Frame(stations_frame)
         list_frame.pack(fill="both", expand=True, padx=8, pady=6)
 
-        self.station_listbox = tk.Listbox(list_frame, selectmode=tk.MULTIPLE, height=12)
+        self.station_listbox = tk.Listbox(list_frame, selectmode=tk.MULTIPLE, height=12, exportselection=False)
         self.station_listbox.pack(side="left", fill="both", expand=True)
+
+        # Selección robusta: cada clic marca/desmarca una estación sin perder las anteriores.
+        self.station_listbox.bind("<Button-1>", self.toggle_station_selection_on_click)
         self.station_listbox.bind("<<ListboxSelect>>", self.sync_visible_selection)
 
         station_scroll = ttk.Scrollbar(list_frame, orient="vertical", command=self.station_listbox.yview)
@@ -1562,15 +1565,53 @@ class LegajosGUIV2(BaseApp):
             if codigo in self.selected_station_codes:
                 self.station_listbox.select_set(idx)
 
+    def toggle_station_selection_on_click(self, event=None):
+        """
+        Permite seleccionar varias estaciones con un clic simple.
+
+        Cada clic sobre una fila:
+        - si la estación no estaba seleccionada, la agrega
+        - si ya estaba seleccionada, la quita
+
+        No elimina las demás estaciones ya seleccionadas.
+        """
+        if self.current_action not in {
+            "init", "addruta", "addmantenimiento_grupal",
+            "addioarr", "addconvenio_dz", "addaforo_sin_ruta"
+        }:
+            return "break"
+
+        idx = self.station_listbox.nearest(event.y)
+        if idx < 0 or idx >= len(self.station_items_filtered):
+            return "break"
+
+        codigo, _ = self.station_items_filtered[idx]
+
+        if codigo in self.selected_station_codes:
+            self.selected_station_codes.discard(codigo)
+        else:
+            self.selected_station_codes.add(codigo)
+
+        self.filter_station_list()
+
+        if self.current_action == "addioarr":
+            self.update_nombre_ioarr_from_selected_stations()
+
+        return "break"
+
     def sync_visible_selection(self, event=None):
+        """
+        Sincronización secundaria para selección con teclado o métodos internos.
+
+        No borra selecciones previas, para evitar que solo quede la última estación.
+        La selección principal con mouse se maneja en toggle_station_selection_on_click.
+        """
         visible_codes = [codigo for codigo, _ in self.station_items_filtered]
         selected_indexes = set(self.station_listbox.curselection())
 
-        for idx, codigo in enumerate(visible_codes):
-            if idx in selected_indexes:
-                self.selected_station_codes.add(codigo)
-            else:
-                self.selected_station_codes.discard(codigo)
+        for idx in selected_indexes:
+            if 0 <= idx < len(visible_codes):
+                self.selected_station_codes.add(visible_codes[idx])
 
         if self.current_action == "addioarr":
             self.update_nombre_ioarr_from_selected_stations()
@@ -1707,8 +1748,8 @@ class LegajosGUIV2(BaseApp):
         - nombre IOARR
         """
         # Limpiar archivo fuente
-        if hasattr(self, "src_var"):
-            self.src_var.set("")
+        if hasattr(self, "src_field"):
+            self.src_field.set("")
 
         # Limpiar estación individual
         if hasattr(self, "station_search_var"):
